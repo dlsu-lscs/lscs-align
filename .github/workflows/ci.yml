@@ -1,0 +1,76 @@
+name: Align CI & DevSecOps Gate
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+  push:
+    branches: [ main, dev ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: 🛡️ Gitleaks Secret Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for Leaked Secrets & Credentials
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  code-quality:
+    name: 🧪 Quality, Build & Test
+    runs-on: ubuntu-latest
+    needs: secret-scan
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
+
+      # Check if package.json exists before attempting node commands
+      - name: Check Package Manifest
+        id: check-pkg
+        run: |
+          if [ -f "package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No package.json yet. Waiting for initial framework scaffolding."
+          fi
+
+      - name: Install Dependencies
+        if: steps.check-pkg.outputs.exists == 'true'
+        run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Linter Check
+        if: steps.check-pkg.outputs.exists == 'true'
+        run: npm run lint --if-present
+
+      - name: TypeScript Typecheck
+        if: steps.check-pkg.outputs.exists == 'true'
+        run: npx tsc --noEmit --if-present
+
+      - name: Run Test Suite
+        if: steps.check-pkg.outputs.exists == 'true'
+        run: npm test --if-present
+
+      - name: Production Build Check
+        if: steps.check-pkg.outputs.exists == 'true'
+        run: npm run build --if-present
