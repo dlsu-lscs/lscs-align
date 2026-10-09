@@ -16,6 +16,13 @@ test('.env.example uses one server-side session model and safe placeholders', as
   assert.match(content, /^DATABASE_MIGRATION_PASSWORD=/m);
   assert.match(content, /^EXPECTED_DATABASE_NAME=align_local$/m);
   assert.match(content, /^SESSION_SECRET=/m);
+  assert.match(content, /^GOOGLE_OAUTH_CLIENT_ID=/m);
+  assert.match(content, /^GOOGLE_OAUTH_CLIENT_SECRET=/m);
+  assert.match(
+    content,
+    /^GOOGLE_OAUTH_REDIRECT_URI=http:\/\/localhost:3000\/api\/auth\/google\/callback$/m,
+  );
+  assert.match(content, /^OTEL_EXPORTER_OTLP_HEADERS=/m);
   assert.doesNotMatch(content, /^JWT_SECRET=/m);
   assert.doesNotMatch(content, /dev-align\.dlsu-lscs\.org/);
   assert.doesNotMatch(content, /align_development/);

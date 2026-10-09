@@ -81,7 +81,11 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:?APP_ORIGIN is required}
       ALLOWED_ORIGINS: ${APP_ORIGIN}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
-      OTEL_SERVICE_NAME: align-api
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:?OTEL_EXPORTER_OTLP_HEADERS is required}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:?OTEL_SERVICE_NAME is required}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?GOOGLE_OAUTH_CLIENT_ID is required}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:?GOOGLE_OAUTH_CLIENT_SECRET is required}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:?GOOGLE_OAUTH_REDIRECT_URI is required}
     expose:
       - '4000'
     depends_on:
@@ -177,7 +181,10 @@ services:
       - '5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/postgres/001-bootstrap.sh:/docker-entrypoint-initdb.d/001-bootstrap.sh:ro
+    configs:
+      - source: postgres-bootstrap
+        target: /docker-entrypoint-initdb.d/001-bootstrap.sh
+        mode: 0555
     networks:
       - backend
     healthcheck:
@@ -209,3 +216,7 @@ networks:
 
 volumes:
   postgres-data:
+
+configs:
+  postgres-bootstrap:
+    file: ./docker/postgres/001-bootstrap.sh

@@ -21,6 +21,11 @@
     "test:e2e": "node --test tests/e2e/*.test.mjs",
     "build": "npm run build --workspace=@align/web && npm run build --workspace=@align/api",
     "db:migrate": "npm run db:migrate --workspace=@align/api",
+    "deploy:render": "node scripts/deploy/render-compose.mjs",
+    "deploy:dokploy": "node scripts/deploy/dokploy.mjs",
+    "deploy:smoke": "node scripts/deploy/smoke.mjs",
+    "deploy:backup": "node scripts/deploy/backup.mjs",
+    "deploy:notify": "node scripts/deploy/notify.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {

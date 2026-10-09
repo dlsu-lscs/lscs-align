@@ -10,9 +10,9 @@ set -eu
 
 validate_identifier() {
   case "$1" in
-    [a-z][a-z0-9_]*) ;;
-    *) echo "Invalid PostgreSQL identifier" >&2; exit 1 ;;
+    ''|[!a-z]*|*[!a-z0-9_]*) echo "Invalid PostgreSQL identifier" >&2; exit 1 ;;
   esac
+  [ "${#1}" -le 63 ] || { echo "PostgreSQL identifier is too long" >&2; exit 1; }
 }
 
 validate_identifier "$DATABASE_NAME"

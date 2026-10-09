@@ -29,4 +29,4 @@ The committed example values are local-only placeholders. Staging and production
 
 Code moves through `working branch -> dev -> main`. A trusted `main` merge builds immutable web and API images once and deploys them to staging. After acceptance, production receives the same GHCR image digests without rebuilding.
 
-See `CONTRIBUTING.md`, `SECURITY.md`, and `docs/environments.md` before contributing or operating the system.
+See `CONTRIBUTING.md`, `SECURITY.md`, `docs/environments.md`, `docs/configuration.md`, and `docs/operations.md` before contributing or operating the system.

@@ -130,7 +130,11 @@ export function createApiServer(options: ApiServerOptions): Server {
     }
 
     if (route === '/healthz') {
-      sendJson(response, 200, { status: 'ok', service: 'api' });
+      sendJson(response, 200, {
+        status: 'ok',
+        service: 'api',
+        sourceCommit: options.revision,
+      });
       return;
     }
 
@@ -140,6 +144,7 @@ export function createApiServer(options: ApiServerOptions): Server {
         sendJson(response, 200, {
           status: 'ready',
           service: 'api',
+          sourceCommit: options.revision,
           schemaVersion: readiness.schemaVersion,
         });
       } catch {

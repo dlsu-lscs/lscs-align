@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 const checkoutSha = '11d5960a326750d5838078e36cf38b85af677262';
 const setupNodeSha = '49933ea5288caeca8642d1e84afbd3f7d6820020';
 const uploadArtifactSha = 'ea165f8d65b6e75b540449e92b4886f43607fa02';
+const downloadArtifactSha = 'd3f86a106a0bac45b974a628896c90dbdf5c8093';
 const actionlintImage =
   'rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667';
 const gitleaksImage =
@@ -112,11 +113,90 @@ test('trusted-main release builds immutable images only after successful push CI
   assertActionsArePinned(value);
   assert.match(source, new RegExp(`actions/checkout@${checkoutSha}`));
   assert.match(source, new RegExp(`actions/upload-artifact@${uploadArtifactSha}`));
-  assert.doesNotMatch(source, /pull_request_target|\bsecrets\./);
+  assert.doesNotMatch(commands(release), /\bsecrets\./);
+  assert.doesNotMatch(source, /pull_request_target/);
 
   const releaseCommands = commands(release);
   assert.equal((releaseCommands.match(/docker buildx build/g) ?? []).length, 2);
   assert.equal((releaseCommands.match(/--push/g) ?? []).length, 2);
   assert.match(releaseCommands, /sha-\$\{SOURCE_COMMIT\}/);
   assert.match(releaseCommands, /scripts\/release\/manifest\.mjs/);
+});
+
+test('trusted release deploys staging then promotes the same manifest to protected production', async () => {
+  const { source, value } = await workflow('release.yml');
+  const staging = value.jobs['deploy-staging'];
+  const production = value.jobs['promote-production'];
+
+  assert.equal(value.concurrency.group, 'align-deployment-pipeline');
+  assert.equal(value.concurrency['cancel-in-progress'], false);
+
+  assert.deepEqual(Object.keys(value.jobs), [
+    'build-release',
+    'deploy-staging',
+    'promote-production',
+  ]);
+  assert.equal(staging.needs, 'build-release');
+  assert.equal(staging.environment.name, 'staging');
+  assert.equal(staging.environment.url, 'https://staging-align.dlsu-lscs.org');
+  assert.deepEqual(production.needs, ['build-release', 'deploy-staging']);
+  assert.equal(production.environment.name, 'production');
+  assert.equal(production.environment.url, 'https://align.dlsu-lscs.org');
+  assert.deepEqual(staging.permissions, {
+    actions: 'read',
+    contents: 'read',
+    deployments: 'write',
+  });
+  assert.deepEqual(production.permissions, staging.permissions);
+  assertActionsArePinned(value);
+  assert.match(source, new RegExp(`actions/download-artifact@${downloadArtifactSha}`));
+
+  const stagingCommands = commands(staging);
+  const productionCommands = commands(production);
+  for (const text of [stagingCommands, productionCommands]) {
+    assert.doesNotMatch(text, /docker (?:build|buildx)/);
+    assert.match(text, /render-compose\.mjs/);
+    assert.match(text, /dokploy\.mjs/);
+    assert.match(text, /smoke\.mjs/);
+    assert.match(text, /notify\.mjs/);
+  }
+  assert.match(stagingCommands, /--target staging/);
+  assert.match(productionCommands, /--target production/);
+  assert.equal(
+    productionCommands.indexOf('backup.mjs') < productionCommands.indexOf('dokploy.mjs'),
+    true,
+  );
+  assert.match(source, /CLOUDFLARE_ACCESS_CLIENT_ID/);
+  assert.match(source, /DOKPLOY_API_KEY/);
+  assert.match(source, /DISCORD_WEBHOOK_URL/);
+});
+
+test('manual rollback is protected, manifest-driven, and schema-compatible', async () => {
+  let loaded;
+  try {
+    loaded = await workflow('rollback.yml');
+  } catch (error) {
+    assert.fail(`rollback workflow must exist: ${error.message}`);
+  }
+  const { source, value } = loaded;
+  const rollback = value.jobs.rollback;
+
+  assert(value.on.workflow_dispatch);
+  assert.equal(value.concurrency.group, 'align-deployment-pipeline');
+  assert.equal(rollback.environment.name, '${{ inputs.environment }}');
+  assert.deepEqual(rollback.permissions, {
+    actions: 'read',
+    contents: 'read',
+    deployments: 'write',
+  });
+  assertActionsArePinned(value);
+  const rollbackCommands = commands(rollback);
+  assert.doesNotMatch(rollbackCommands, /docker (?:build|buildx)/);
+  assert.match(rollbackCommands, /git merge-base --is-ancestor/);
+  assert.match(rollbackCommands, /schema-compatibility\.mjs/);
+  assert.equal(
+    rollbackCommands.indexOf('schema-compatibility.mjs') < rollbackCommands.indexOf('dokploy.mjs'),
+    true,
+  );
+  assert.match(source, new RegExp(`actions/download-artifact@${downloadArtifactSha}`));
 });

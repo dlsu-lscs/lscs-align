@@ -45,7 +45,7 @@ test('GET /healthz does not query readiness dependencies', async (t) => {
 
   assert.equal(response.status, 200);
   assert.equal(readinessCalls, 0);
-  assert.deepEqual(await response.json(), { status: 'ok', service: 'api' });
+  assert.deepEqual(await response.json(), { status: 'ok', service: 'api', sourceCommit: revision });
 });
 
 test('GET /readyz reports configuration, database, and migration readiness', async (t) => {
@@ -57,6 +57,7 @@ test('GET /readyz reports configuration, database, and migration readiness', asy
   assert.deepEqual(await response.json(), {
     status: 'ready',
     service: 'api',
+    sourceCommit: revision,
     schemaVersion: '001',
   });
 });

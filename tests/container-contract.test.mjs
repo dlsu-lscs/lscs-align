@@ -42,6 +42,8 @@ test('Compose defines the four-service dependency chain and no database host por
   assert.match(compose, /internal: true/);
   assert.match(compose, /PathPrefix\(`\/api`\)/);
   assert.match(compose, /stripprefix\.prefixes=\/api/);
+  assert.match(compose, /^configs:\s*\n\s+postgres-bootstrap:\s*\n\s+file:/m);
+  assert.doesNotMatch(compose, /\.\/docker\/postgres\/001-bootstrap\.sh:.*docker-entrypoint/);
 });
 
 test('Compose isolates credentials and applies service hardening', async () => {
@@ -79,6 +81,8 @@ test('database bootstrap creates separate non-superuser roles safely', async () 
   assert.match(bootstrap, /REVOKE ALL ON DATABASE/);
   assert.match(bootstrap, /REVOKE CREATE ON SCHEMA public/);
   assert.match(bootstrap, /format\('CREATE ROLE %I LOGIN PASSWORD %L/);
+  assert.match(bootstrap, /\*\[!a-z0-9_\]\*/);
+  assert.match(bootstrap, /\$\{#1\}.*-le 63/);
   assert.doesNotMatch(bootstrap, /align_(?:runtime|migration)_password/);
 });
 

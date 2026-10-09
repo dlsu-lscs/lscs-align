@@ -68,6 +68,37 @@ test('fresh and repeated migrations are deterministic', async () => {
   assert.deepEqual(history.rows, [{ version: '0001', name: 'platform_baseline' }]);
 });
 
+test('an existing previous schema upgrades without losing its records', async () => {
+  await migrationPool.query('DROP SCHEMA IF EXISTS align CASCADE');
+  await migrationPool.query(`
+    CREATE SCHEMA align;
+    CREATE TABLE align.schema_migrations (
+      version text PRIMARY KEY,
+      name text NOT NULL,
+      checksum text NOT NULL CHECK (checksum ~ '^[0-9a-f]{64}$'),
+      applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
+    );
+    INSERT INTO align.schema_migrations(version, name, checksum)
+    VALUES ('0000', 'legacy_baseline', repeat('0', 64));
+    CREATE TABLE align.legacy_record(id integer PRIMARY KEY, label text NOT NULL);
+    INSERT INTO align.legacy_record(id, label) VALUES (1, 'preserve-me');
+  `);
+
+  const result = await runMigrations({
+    pool: migrationPool,
+    expectedIdentity,
+    migrationsDirectory,
+  });
+  const legacy = await migrationPool.query('SELECT id, label FROM align.legacy_record');
+  const history = await migrationPool.query(
+    'SELECT version FROM align.schema_migrations ORDER BY version',
+  );
+
+  assert.deepEqual(result, { applied: ['0001'], skipped: [] });
+  assert.deepEqual(legacy.rows, [{ id: 1, label: 'preserve-me' }]);
+  assert.deepEqual(history.rows, [{ version: '0000' }, { version: '0001' }]);
+});
+
 test('readiness verifies database identity and reports the latest migration', async () => {
   const readiness = createReadinessProbe(migrationPool, expectedIdentity);
 
