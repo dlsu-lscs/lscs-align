@@ -15,9 +15,14 @@ for (const [service, port] of [
 
     assert.match(dockerfile, /^FROM node:24[^\s]*@sha256:[0-9a-f]{64} AS /m);
     assert.match(dockerfile, / AS build/m);
-    assert.match(dockerfile, /^USER node$/m);
+    assert.match(
+      dockerfile,
+      /^FROM gcr\.io\/distroless\/nodejs24-debian13:nonroot@sha256:[0-9a-f]{64} AS runtime$/m,
+    );
+    assert.match(dockerfile, /^USER nonroot$/m);
     assert.match(dockerfile, new RegExp(`^EXPOSE ${port}$`, 'm'));
     assert.match(dockerfile, /^HEALTHCHECK /m);
+    assert.match(dockerfile, /\/nodejs\/bin\/node/);
     assert.match(dockerfile, new RegExp(`127\\.0\\.0\\.1:${port}/healthz`));
     assert.match(dockerfile, /org\.opencontainers\.image\.revision/);
     assert.doesNotMatch(dockerfile, /npm install(?!\s+--)/);
@@ -57,6 +62,7 @@ test('Compose isolates credentials and applies service hardening', async () => {
   assert.equal((compose.match(/cap_drop:\s*\n\s*- ALL/g) ?? []).length, 3);
   assert.equal((compose.match(/read_only: true/g) ?? []).length, 3);
   assert.equal((compose.match(/no-new-privileges:true/g) ?? []).length, 3);
+  assert.equal((compose.match(/user: ['"]65532:65532['"]/g) ?? []).length, 3);
   assert.equal((compose.match(/max-size: ['"]10m['"]/g) ?? []).length, 4);
   assert.equal((compose.match(/max-file: ['"]3['"]/g) ?? []).length, 4);
   assert.match(compose, /memory: 256M/);

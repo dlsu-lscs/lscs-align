@@ -6,7 +6,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
-    user: node
+    user: '65532:65532'
     read_only: true
     cap_drop:
       - ALL
@@ -58,7 +58,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
-    user: node
+    user: '65532:65532'
     read_only: true
     cap_drop:
       - ALL
@@ -122,7 +122,7 @@ services:
     pull_policy: always
     restart: 'no'
     init: true
-    user: node
+    user: '65532:65532'
     read_only: true
     cap_drop:
       - ALL
