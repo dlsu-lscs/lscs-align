@@ -90,6 +90,7 @@ test('pull-request CI fails closed with fixed checks and immutable tooling', asy
   assert.match(commands(value.jobs.containers), /\/healthz/);
   assert.match(commands(value.jobs.containers), /WEB_PORT=3000/);
   assert.match(commands(value.jobs.containers), /API_PORT=4000/);
+  assert.match(commands(value.jobs.policy), /scripts\/policy\/promotion\.mjs/);
 });
 
 test('trusted-main release builds immutable images only after successful push CI', async () => {
