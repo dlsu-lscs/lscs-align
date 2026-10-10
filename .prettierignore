@@ -1,0 +1,8 @@
+node_modules
+.next
+dist
+.turbo
+pnpm-lock.yaml
+.github
+apps/web/next-env.d.ts
+packages/db/drizzle
