@@ -2,75 +2,230 @@ name: Align CI & DevSecOps Gate
 
 on:
   pull_request:
-    branches: [ main, dev ]
+    branches: [dev, main]
   push:
-    branches: [ main, dev ]
+    branches: [dev, main]
+
+permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  secret-scan:
-    name: 🛡️ Gitleaks Secret Audit
-    runs-on: ubuntu-latest
+  policy:
+    name: Repository & Workflow Policy
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - name: Checkout Code Repository
-        uses: actions/checkout@v4
+      - name: Check out the complete repository history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - name: Scan for Leaked Secrets & Credentials
-        uses: gitleaks/gitleaks-action@v2
+      - name: Validate GitHub Actions workflows
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/repo"
+          --workdir /repo
+          rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+          -color
+
+      - name: Enforce the branch promotion path
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: node scripts/policy/promotion.mjs
 
-  code-quality:
-    name: 🧪 Quality, Build & Test
-    runs-on: ubuntu-latest
-    needs: secret-scan
+      - name: Validate staging and production Compose contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_ENV=staging \
+          DATABASE_NAME=align_staging \
+          EXPECTED_DATABASE_NAME=align_staging \
+          APP_ORIGIN=https://staging-align.dlsu-lscs.org \
+          APP_DOMAIN=staging-align.dlsu-lscs.org \
+          COMPOSE_PROJECT_NAME=align-staging \
+          ROUTER_PREFIX=align-staging \
+          ALLOWED_ORIGINS=https://staging-align.dlsu-lscs.org \
+          docker compose --env-file .env.example config --quiet
+
+          APP_ENV=production \
+          DATABASE_NAME=align_production \
+          EXPECTED_DATABASE_NAME=align_production \
+          APP_ORIGIN=https://align.dlsu-lscs.org \
+          APP_DOMAIN=align.dlsu-lscs.org \
+          COMPOSE_PROJECT_NAME=align-production \
+          ROUTER_PREFIX=align-production \
+          ALLOWED_ORIGINS=https://align.dlsu-lscs.org \
+          docker compose --env-file .env.example config --quiet
+
+      - name: Scan the complete Git history for secrets
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/repo"
+          --workdir /repo
+          ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git --no-banner --redact --log-opts="--all"
+
+  quality:
+    name: Quality & Unit Tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - name: Checkout Code Repository
-        uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
-          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          node-version: 24
+          cache: npm
 
-      # Check if package.json exists before attempting node commands
-      - name: Check Package Manifest
-        id: check-pkg
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify formatting
+        run: npm run format:check
+
+      - name: Run lint rules
+        run: npm run lint
+
+      - name: Run strict type checking
+        run: npm run typecheck
+
+      - name: Run unit and contract tests
+        run: npm test
+
+      - name: Build production applications
+        run: npm run build
+
+      - name: Block high and critical dependency vulnerabilities
+        run: npm audit --audit-level=high
+
+  integration:
+    name: PostgreSQL Integration
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: align-ci-admin-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Create restricted test database roles
+        shell: bash
         run: |
-          if [ -f "package.json" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ No package.json yet. Waiting for initial framework scaffolding."
-          fi
+          set -euo pipefail
+          psql_admin() {
+            docker run --rm --network host \
+              -e PGPASSWORD=align-ci-admin-only \
+              postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea \
+              psql --set ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres "$@"
+          }
+          psql_admin -d postgres -c "CREATE ROLE align_test_migrator LOGIN PASSWORD 'align-ci-migrator-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
+          psql_admin -d postgres -c "CREATE ROLE align_test_app LOGIN PASSWORD 'align-ci-runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
+          psql_admin -d postgres -c "CREATE DATABASE align_test OWNER align_test_migrator"
+          psql_admin -d postgres -c "ALTER DATABASE align_test SET align.environment = 'test'"
+          psql_admin -d align_test -c "REVOKE ALL ON DATABASE align_test FROM PUBLIC"
+          psql_admin -d align_test -c "GRANT CONNECT ON DATABASE align_test TO align_test_migrator, align_test_app"
+          psql_admin -d align_test -c "REVOKE CREATE ON SCHEMA public FROM PUBLIC"
 
-      - name: Install Dependencies
-        if: steps.check-pkg.outputs.exists == 'true'
+      - name: Run real PostgreSQL migration and privilege tests
+        env:
+          TEST_MIGRATION_DATABASE_URL: postgresql://align_test_migrator:align-ci-migrator-only@127.0.0.1:5432/align_test
+          TEST_RUNTIME_DATABASE_URL: postgresql://align_test_app:align-ci-runtime-only@127.0.0.1:5432/align_test
+        run: npm run test:integration
+
+  containers:
+    name: Container Security
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Scan repository configuration and dependencies
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/workspace"
+          --workdir /workspace
+          ghcr.io/aquasecurity/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+          fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 .
+
+      - name: Build revisioned web and API images
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          if [ -f "package-lock.json" ]; then
-            npm ci
-          else
-            npm install
-          fi
+          set -euo pipefail
+          docker build --build-arg SOURCE_COMMIT="$SOURCE_COMMIT" -f apps/web/Dockerfile -t align-web:ci .
+          docker build --build-arg SOURCE_COMMIT="$SOURCE_COMMIT" -f apps/api/Dockerfile -t align-api:ci .
 
-      - name: Linter Check
-        if: steps.check-pkg.outputs.exists == 'true'
-        run: npm run lint --if-present
+      - name: Block high and critical image vulnerabilities
+        run: |
+          set -euo pipefail
+          for image in align-web:ci align-api:ci; do
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              ghcr.io/aquasecurity/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 \
+              image --severity HIGH,CRITICAL --exit-code 1 "$image"
+          done
 
-      - name: TypeScript Typecheck
-        if: steps.check-pkg.outputs.exists == 'true'
-        run: npx tsc --noEmit --if-present
+      - name: Verify non-root images and liveness endpoints
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect --format '{{.Config.User}}' align-web:ci)" = nonroot
+          test "$(docker image inspect --format '{{.Config.User}}' align-api:ci)" = nonroot
 
-      - name: Run Test Suite
-        if: steps.check-pkg.outputs.exists == 'true'
-        run: npm test --if-present
+          docker run -d --rm --name align-web-ci --read-only --tmpfs /tmp:rw,noexec,nosuid \
+            -p 127.0.0.1:3000:3000 \
+            -e APP_ENV=staging -e SOURCE_COMMIT="$SOURCE_COMMIT" -e WEB_PORT=3000 \
+            align-web:ci
+          docker run -d --rm --name align-api-ci --read-only --tmpfs /tmp:rw,noexec,nosuid \
+            -p 127.0.0.1:4000:4000 \
+            -e APP_ENV=staging -e SOURCE_COMMIT="$SOURCE_COMMIT" -e API_PORT=4000 \
+            -e EXPECTED_DATABASE_NAME=align_staging \
+            -e DATABASE_HOST=127.0.0.1 -e DATABASE_PORT=5432 -e DATABASE_NAME=align_staging \
+            -e DATABASE_RUNTIME_USER=ci -e DATABASE_RUNTIME_PASSWORD=ci-only \
+            -e SESSION_SECRET=ci-only-session-secret-at-least-32-bytes \
+            -e APP_ORIGIN=https://staging-align.dlsu-lscs.org \
+            -e ALLOWED_ORIGINS=https://staging-align.dlsu-lscs.org \
+            align-api:ci
+          trap 'docker rm -f align-web-ci align-api-ci >/dev/null 2>&1 || true' EXIT
 
-      - name: Production Build Check
-        if: steps.check-pkg.outputs.exists == 'true'
-        run: npm run build --if-present
+          for url in http://127.0.0.1:3000/healthz http://127.0.0.1:4000/healthz; do
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error "$url" >/dev/null; then break; fi
+              if [ "$attempt" -eq 30 ]; then exit 1; fi
+              sleep 1
+            done
+          done
+          test "$(curl --fail --silent http://127.0.0.1:3000/revision.json | jq -r .sourceCommit)" = "$SOURCE_COMMIT"

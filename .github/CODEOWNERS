@@ -1,0 +1,11 @@
+# General ownership falls back to the project maintainers.
+* @dlsu-lscs/align-maintainers
+
+# Security-sensitive delivery surfaces require Senior DevSecOps review.
+/.github/ @dlsu-lscs/senior-devsecops
+/compose.yaml @dlsu-lscs/senior-devsecops
+/apps/*/Dockerfile @dlsu-lscs/senior-devsecops
+/apps/api/migrations/ @dlsu-lscs/senior-devsecops
+/scripts/ @dlsu-lscs/senior-devsecops
+/docs/runbooks/ @dlsu-lscs/senior-devsecops
+/SECURITY.md @dlsu-lscs/senior-devsecops

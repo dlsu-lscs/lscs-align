@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose a scoped, testable improvement.
+title: '[FEATURE] '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user need without prescribing implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions of satisfaction and failure behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Risk tier
+      options:
+        - Tier 1
+        - Tier 2
+        - Tier 3
+    validations:
+      required: true
