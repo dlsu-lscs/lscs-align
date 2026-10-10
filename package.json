@@ -1,23 +1,45 @@
 {
-  "name": "align",
+  "name": "lscs-align",
+  "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@10.21.0",
+  "type": "module",
+  "packageManager": "npm@11.13.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
-    "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:generate": "pnpm --filter @align/db db:generate",
-    "db:migrate": "pnpm --filter @align/db db:migrate"
+    "format": "prettier --write .",
+    "lint": "eslint . --max-warnings=0 --ignore-pattern \"apps/web/.next/**\"",
+    "typecheck": "tsc --noEmit --skipLibCheck --pretty false -p tsconfig.typecheck.json && npm run typecheck --workspace=@align/web && npm run typecheck --workspace=@align/api && npm run typecheck --workspace=@align/db && npm run typecheck --workspace=@align/shared",
+    "test": "node --test tests/*.test.mjs apps/web/test/*.test.mjs apps/api/test/*.test.mjs",
+    "test:integration": "node --test apps/api/test/integration/*.test.mjs",
+    "test:e2e": "node --test tests/e2e/*.test.mjs",
+    "build": "npm run build --workspace=@align/shared && npm run build --workspace=@align/db && npm run build --workspace=@align/web && npm run build --workspace=@align/api",
+    "db:migrate": "npm run db:migrate --workspace=@align/api",
+    "deploy:render": "node scripts/deploy/render-compose.mjs",
+    "deploy:dokploy": "node scripts/deploy/dokploy.mjs",
+    "deploy:smoke": "node scripts/deploy/smoke.mjs",
+    "deploy:backup": "node scripts/deploy/backup.mjs",
+    "deploy:notify": "node scripts/deploy/notify.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "dev:web": "npm run dev --workspace=@align/web",
+    "dev:api": "npm run dev --workspace=@align/api"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
-    "eslint": "^9.0.0",
-    "prettier": "^3.0.0",
-    "turbo": "^2.0.0",
-    "typescript": "^5.0.0",
-    "typescript-eslint": "^8.0.0"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.1",
+    "@types/pg": "^8.23.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "yaml": "^2.8.1"
   }
 }

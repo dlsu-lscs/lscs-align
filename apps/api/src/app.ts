@@ -1,15 +1,18 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
-import { registerHealthRoute } from './routes/health.js';
+import { registerHealthRoute } from './routes/health.ts';
 
 export function createApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: false });
 
-  app.register(cors, { origin: 'http://localhost:3000' });
+  const origins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.register(cors, { origin: origins });
   app.register(registerHealthRoute);
 
-  app.setErrorHandler((error, request, reply) => {
-    request.log.error(error);
+  app.setErrorHandler((_error, _request, reply) => {
     reply.status(500).send({ error: 'Internal Server Error' });
   });
 

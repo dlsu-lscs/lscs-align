@@ -1,49 +1,40 @@
-# ALIGN
+# LSCS Align
 
-ALIGN is a scheduling and availability management platform in its initial development setup. This repository currently contains only a placeholder frontend, a health-check API, and shared development foundations. Product features are future work.
+Align is the meeting availability and scheduling platform for DLSU student leaders and organizations, developed by the 41st La Salle Computer Society.
 
-## Stack
+> **Project status:** foundation work is in progress. Staging and production are not yet declared operational.
 
-- pnpm workspaces and Turborepo
-- Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui configuration, TanStack Query, Zustand, date-fns, and date-fns-tz
-- Fastify, Zod, and `@fastify/cors`
-- PostgreSQL connection utilities, Drizzle ORM, and Drizzle Kit
-- ESLint and Prettier
+## Repository structure
 
-## Repository
+- `apps/web` — Next.js App Router placeholder and operational endpoints on port 3000.
+- `apps/api` — Fastify application scaffold, operational endpoints, and migration tooling on port 4000.
+- `packages/db` — Drizzle and PostgreSQL application database utilities.
+- `packages/shared` — shared types and schemas.
+- Root TypeScript and ESLint configuration — shared across applications and packages.
+- `docs/adr` and `docs/runbooks` — accepted decisions and operational guidance.
+- `.github/workflows` — validation, release, and promotion automation.
+
+## Local requirements
+
+- Node.js 24 LTS and npm 11
+- Docker with Compose for PostgreSQL integration and container checks
 
 ```text
-apps/web       Next.js placeholder and frontend dependencies
-apps/api       Fastify server and GET /health
-packages/db    PostgreSQL and Drizzle foundation
-packages/shared  Shared types, Zod schemas, and utilities
-packages/config  Shared TypeScript and ESLint configuration
-docs           Architecture and developer guidance
+copy .env.example .env
+npm ci
+npm run check
 ```
 
-## Prerequisites
+The committed example values are local-only placeholders. Staging and production secrets come from the approved LSCS Bitwarden vault; never commit `.env` files.
 
-Node.js 22 or later and pnpm 10.21.0. PostgreSQL is needed only when database migrations or future database features are used.
+Run `npm run dev:web` and `npm run dev:api` in separate terminals for the Next.js placeholder at `http://localhost:3000` and the Fastify health route at `http://localhost:4000/health`. These local app scaffolds start without a database connection.
 
-## Install and run
+The hosted API uses `/healthz` and `/readyz`; the hosted web service uses `/healthz` and `/revision.json`. Compose routes `/api` to the API and serves the Next.js app on the same origin.
 
-```bash
-pnpm install
-pnpm dev
-```
+See [architecture](docs/architecture.md) and [development](docs/development.md) for package boundaries and local conventions.
 
-Open `http://localhost:3000` for the placeholder page and `http://localhost:3001/health` for the API health response. Both apps start without a database connection.
+## Delivery flow
 
-For local variables, copy `.env.example` to `.env` at the repository root. The API reads `PORT` and the database tooling reads `DATABASE_URL` from that file. Copy `NEXT_PUBLIC_API_URL` into `apps/web/.env.local` when frontend code needs it. A blank `DATABASE_URL` is valid for this initial setup.
+Code moves through `working branch -> dev -> main`. A trusted `main` merge builds immutable web and API images once and deploys them to staging. After acceptance, production receives the same GHCR image digests without rebuilding.
 
-```bash
-pnpm build
-pnpm lint
-pnpm typecheck
-pnpm format
-pnpm format:check
-```
-
-Run an app alone with `pnpm --filter @align/web dev` or `pnpm --filter @align/api dev`. For a production-style local run, build first, then use `pnpm --filter @align/web start` or `pnpm --filter @align/api start`.
-
-See [architecture](docs/architecture.md) and [development](docs/development.md) for package boundaries and development conventions.
+See `CONTRIBUTING.md`, `SECURITY.md`, `docs/environments.md`, `docs/configuration.md`, and `docs/operations.md` before contributing or operating the system.

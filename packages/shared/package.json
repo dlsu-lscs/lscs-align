@@ -20,7 +20,6 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@align/config": "workspace:*",
-    "@types/node": "^22.0.0"
+    "@types/node": "^24.19.1"
   }
 }
