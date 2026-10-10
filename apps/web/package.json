@@ -7,7 +7,7 @@
     "build": "next build && tsc -p tsconfig.server.json",
     "start": "node dist/index.js",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@align/shared": "file:../../packages/shared",
