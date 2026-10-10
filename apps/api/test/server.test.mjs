@@ -109,3 +109,23 @@ test('loadApiConfig rejects out-of-range ports and invalid environments', async 
     /APP_ENV/,
   );
 });
+
+test('application routes are served alongside the operational endpoints', async (t) => {
+  const { createApp } = await import('../src/app.ts');
+  const app = createApp();
+  await app.ready();
+  t.after(() => app.close());
+
+  const origin = await start(t, { appHandler: app.routing.bind(app) });
+  const applicationResponse = await fetch(`${origin}/health`);
+  assert.equal(applicationResponse.status, 200);
+  assert.deepEqual(await applicationResponse.json(), { status: 'ok' });
+
+  const operationsResponse = await fetch(`${origin}/healthz`);
+  assert.equal(operationsResponse.status, 200);
+  assert.deepEqual(await operationsResponse.json(), {
+    status: 'ok',
+    service: 'api',
+    sourceCommit: revision,
+  });
+});

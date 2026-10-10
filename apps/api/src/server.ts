@@ -36,6 +36,7 @@ interface ApiServerOptions {
   revision: string;
   readiness: () => Promise<ReadinessResult>;
   logger?: (record: RequestLog) => void;
+  appHandler?: (request: IncomingMessage, response: ServerResponse) => void | Promise<void>;
 }
 
 function parseEnvironment(value: string | undefined): AppEnvironment {
@@ -122,7 +123,7 @@ export function createApiServer(options: ApiServerOptions): Server {
       });
     });
 
-    if (method !== 'GET') {
+    if (method !== 'GET' && (!options.appHandler || route === '/healthz' || route === '/readyz')) {
       errorCode = 'method_not_allowed';
       response.setHeader('allow', 'GET');
       sendJson(response, 405, { error: errorCode });
@@ -158,7 +159,11 @@ export function createApiServer(options: ApiServerOptions): Server {
       return;
     }
 
-    errorCode = 'not_found';
-    sendJson(response, 404, { error: errorCode });
+    if (options.appHandler) {
+      await options.appHandler(request, response);
+    } else {
+      errorCode = 'not_found';
+      sendJson(response, 404, { error: errorCode });
+    }
   });
 }

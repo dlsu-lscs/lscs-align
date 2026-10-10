@@ -1,7 +1,11 @@
 import { createWebServer, loadWebConfig } from './server.ts';
+import next from 'next';
 
 const config = loadWebConfig(process.env);
-const server = createWebServer(config);
+const createNext = next as unknown as typeof import('next/dist/server/next.js').default;
+const app = createNext({ dev: false, dir: process.cwd() });
+await app.prepare();
+const server = createWebServer({ ...config, appHandler: app.getRequestHandler() });
 
 server.listen(config.port, config.host, () => {
   process.stdout.write(

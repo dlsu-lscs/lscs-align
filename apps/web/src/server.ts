@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
 const environments = ['development', 'staging', 'production'] as const;
@@ -31,6 +31,7 @@ interface WebServerOptions {
   environment: AppEnvironment;
   revision: string;
   logger?: (record: RequestLog) => void;
+  appHandler?: (request: IncomingMessage, response: ServerResponse) => void | Promise<void>;
 }
 
 function parseEnvironment(value: string | undefined): AppEnvironment {
@@ -64,9 +65,15 @@ export function loadWebConfig(environment: NodeJS.ProcessEnv): WebConfig {
   };
 }
 
-function setSecurityHeaders(response: ServerResponse, requestId: string): void {
+function contentSecurityPolicy(nonce?: string): string {
+  return nonce
+    ? `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; frame-ancestors 'none'`
+    : "default-src 'self'; frame-ancestors 'none'";
+}
+
+function setSecurityHeaders(response: ServerResponse, requestId: string, policy: string): void {
   response.setHeader('cache-control', 'no-store');
-  response.setHeader('content-security-policy', "default-src 'self'; frame-ancestors 'none'");
+  response.setHeader('content-security-policy', policy);
   response.setHeader('permissions-policy', 'camera=(), geolocation=(), microphone=()');
   response.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
   response.setHeader('x-content-type-options', 'nosniff');
@@ -101,7 +108,16 @@ export function createWebServer(options: WebServerOptions): Server {
     const route = new URL(request.url ?? '/', 'http://localhost').pathname;
     let errorCode: string | null = null;
 
-    setSecurityHeaders(response, requestId);
+    const nonce =
+      options.appHandler && route !== '/healthz' && route !== '/revision.json'
+        ? randomBytes(16).toString('base64')
+        : undefined;
+    const policy = contentSecurityPolicy(nonce);
+    setSecurityHeaders(response, requestId, policy);
+    if (nonce) {
+      request.headers['content-security-policy'] = policy;
+      request.headers['x-nonce'] = nonce;
+    }
     response.once('finish', () => {
       logger({
         timestamp: new Date().toISOString(),
@@ -117,7 +133,10 @@ export function createWebServer(options: WebServerOptions): Server {
       });
     });
 
-    if (method !== 'GET') {
+    if (
+      method !== 'GET' &&
+      (!options.appHandler || route === '/healthz' || route === '/revision.json')
+    ) {
       errorCode = 'method_not_allowed';
       response.setHeader('allow', 'GET');
       sendJson(response, 405, { error: errorCode });
@@ -135,6 +154,11 @@ export function createWebServer(options: WebServerOptions): Server {
         environment: options.environment,
         sourceCommit: options.revision,
       });
+      return;
+    }
+
+    if (options.appHandler) {
+      void options.appHandler(request, response);
       return;
     }
 
