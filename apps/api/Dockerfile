@@ -4,11 +4,16 @@ WORKDIR /workspace
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/api/package.json apps/api/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/db/package.json packages/db/package.json
 RUN npm ci
 
 FROM dependencies AS build
 COPY tsconfig.json tsconfig.base.json tsconfig.typecheck.json ./
+COPY packages packages
 COPY apps/api apps/api
+RUN npm run build --workspace=@align/shared
+RUN npm run build --workspace=@align/db
 RUN npm run build --workspace=@align/api
 
 FROM dependencies AS production-dependencies
@@ -21,6 +26,8 @@ LABEL org.opencontainers.image.source="https://github.com/dlsu-lscs/lscs-align" 
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=production-dependencies --chown=65532:65532 /workspace/node_modules ./node_modules
+COPY --from=build --chown=65532:65532 /workspace/packages/shared ./packages/shared
+COPY --from=build --chown=65532:65532 /workspace/packages/db ./packages/db
 COPY --from=build --chown=65532:65532 /workspace/apps/api/dist ./dist
 COPY --from=build --chown=65532:65532 /workspace/apps/api/migrations ./migrations
 COPY --from=build --chown=65532:65532 /workspace/apps/api/package.json ./package.json

@@ -79,3 +79,31 @@ test('loadWebConfig rejects invalid production identity', async () => {
     /SOURCE_COMMIT/,
   );
 });
+
+test('application requests can be served without replacing operational endpoints', async (t) => {
+  const origin = await start(t, {
+    appHandler: (request, response) => {
+      response.statusCode = 200;
+      response.end(request.headers['x-nonce']);
+    },
+  });
+
+  const page = await fetch(origin);
+  assert.equal(page.status, 200);
+  const nonce = await page.text();
+  assert.match(nonce, /^[A-Za-z0-9+/]{22}==$/);
+  assert.ok(page.headers.get('content-security-policy')?.includes(`'nonce-${nonce}'`));
+
+  const secondPage = await fetch(origin);
+  assert.notEqual(await secondPage.text(), nonce);
+
+  const health = await fetch(`${origin}/healthz`);
+  assert.deepEqual(await health.json(), { status: 'ok', service: 'web' });
+  assert.equal(
+    health.headers.get('content-security-policy'),
+    "default-src 'self'; frame-ancestors 'none'",
+  );
+
+  const postHealth = await fetch(`${origin}/healthz`, { method: 'POST' });
+  assert.equal(postHealth.status, 405);
+});

@@ -2,3 +2,5 @@ node_modules/
 **/dist/
 coverage/
 package-lock.json
+**/.next/
+apps/web/next-env.d.ts
