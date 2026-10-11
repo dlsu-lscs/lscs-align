@@ -1,0 +1,222 @@
+name: ${COMPOSE_PROJECT_NAME:?COMPOSE_PROJECT_NAME is required}
+
+services:
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE must be an immutable digest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    user: '65532:65532'
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      SOURCE_COMMIT: ${SOURCE_COMMIT:?SOURCE_COMMIT is required}
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: 3000
+    expose:
+      - '3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - edge
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=${TRAEFIK_NETWORK:-dokploy-network}'
+      - 'traefik.http.routers.${ROUTER_PREFIX:?ROUTER_PREFIX is required}-web.rule=Host(`${APP_DOMAIN:?APP_DOMAIN is required}`)'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-web.entrypoints=websecure'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-web.priority=1'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-web.tls=true'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-web.tls.certresolver=letsencrypt'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-web.middlewares=${ROUTER_PREFIX}-compress'
+      - 'traefik.http.middlewares.${ROUTER_PREFIX}-compress.compress=true'
+      - 'traefik.http.services.${ROUTER_PREFIX}-web.loadbalancer.server.port=3000'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+          pids: 100
+        reservations:
+          memory: 64M
+    pids_limit: 100
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  api:
+    image: ${API_IMAGE:?API_IMAGE must be an immutable digest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    user: '65532:65532'
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      SOURCE_COMMIT: ${SOURCE_COMMIT:?SOURCE_COMMIT is required}
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      EXPECTED_DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_RUNTIME_USER: ${DATABASE_RUNTIME_USER:?DATABASE_RUNTIME_USER is required}
+      DATABASE_RUNTIME_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:?DATABASE_RUNTIME_PASSWORD is required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      APP_ORIGIN: ${APP_ORIGIN:?APP_ORIGIN is required}
+      ALLOWED_ORIGINS: ${APP_ORIGIN}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:?OTEL_EXPORTER_OTLP_HEADERS is required}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:?OTEL_SERVICE_NAME is required}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?GOOGLE_OAUTH_CLIENT_ID is required}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:?GOOGLE_OAUTH_CLIENT_SECRET is required}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:?GOOGLE_OAUTH_REDIRECT_URI is required}
+    expose:
+      - '4000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+      - edge
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=${TRAEFIK_NETWORK:-dokploy-network}'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-api.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/api`)'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-api.entrypoints=websecure'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-api.priority=100'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-api.tls=true'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-api.tls.certresolver=letsencrypt'
+      - 'traefik.http.routers.${ROUTER_PREFIX}-api.middlewares=${ROUTER_PREFIX}-api-strip,${ROUTER_PREFIX}-compress'
+      - 'traefik.http.middlewares.${ROUTER_PREFIX}-api-strip.stripprefix.prefixes=/api'
+      - 'traefik.http.services.${ROUTER_PREFIX}-api.loadbalancer.server.port=4000'
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+          pids: 150
+        reservations:
+          memory: 128M
+    pids_limit: 150
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  migrate:
+    image: ${API_IMAGE:?API_IMAGE must be an immutable digest}
+    pull_policy: always
+    restart: 'no'
+    init: true
+    user: '65532:65532'
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    command: ['node', 'dist/migrate.js']
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      EXPECTED_DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_MIGRATION_USER: ${DATABASE_MIGRATION_USER:?DATABASE_MIGRATION_USER is required}
+      DATABASE_MIGRATION_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?DATABASE_MIGRATION_PASSWORD is required}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+          pids: 100
+        reservations:
+          memory: 64M
+    pids_limit: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  db:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: align_bootstrap
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}
+      POSTGRES_DB: postgres
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      DATABASE_NAME: ${DATABASE_NAME:?DATABASE_NAME is required}
+      DATABASE_MIGRATION_USER: ${DATABASE_MIGRATION_USER:?DATABASE_MIGRATION_USER is required}
+      DATABASE_MIGRATION_PASSWORD: ${DATABASE_MIGRATION_PASSWORD:?DATABASE_MIGRATION_PASSWORD is required}
+      DATABASE_RUNTIME_USER: ${DATABASE_RUNTIME_USER:?DATABASE_RUNTIME_USER is required}
+      DATABASE_RUNTIME_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:?DATABASE_RUNTIME_PASSWORD is required}
+    expose:
+      - '5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    configs:
+      - source: postgres-bootstrap
+        target: /docker-entrypoint-initdb.d/001-bootstrap.sh
+        mode: 0555
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U align_bootstrap -d postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          memory: 128M
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+networks:
+  backend:
+    internal: true
+  edge:
+    external: true
+    name: ${TRAEFIK_NETWORK:-dokploy-network}
+
+volumes:
+  postgres-data:
+
+configs:
+  postgres-bootstrap:
+    file: ./docker/postgres/001-bootstrap.sh
