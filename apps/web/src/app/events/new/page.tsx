@@ -1,5 +1,7 @@
 'use client';
 
+import { useMutation } from '@tanstack/react-query';
+import { createEvent } from '@/lib/api/events';
 import { useState } from 'react';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +13,11 @@ export default function Home() {
   const [description, setDescription] = useState('');
   const [nameError, setNameError] = useState('');
   const [descError, setDescError] = useState('');
+
+  const { mutate, isPending, isSuccess, isError, error } = useMutation({
+    mutationFn: ({ name, description }: { name: string; description: string }) =>
+      createEvent(name, description),
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +41,15 @@ export default function Home() {
 
     if (hasError) return;
 
-    console.log(name, description);
+    mutate(
+      { name, description },
+      {
+        onSuccess: () => {
+          setName('');
+          setDescription('');
+        },
+      },
+    );
   };
 
   return (
@@ -69,9 +84,12 @@ export default function Home() {
           {descError && <p className="text-sm text-red-600">{descError}</p>}
         </Field>
 
-        <Button type="submit" className="w-full sm:w-auto">
-          Create Event
+        <Button type="submit" className="w-full sm:w-auto" disabled={isPending}>
+          {isPending ? 'Creating...' : 'Create Event'}
         </Button>
+
+        {isSuccess && <p className="text-sm text-green-600">Event created!</p>}
+        {isError && <p className="text-sm text-red-600">Error: {error.message}</p>}
       </form>
     </main>
   );
