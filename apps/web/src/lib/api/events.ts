@@ -7,7 +7,10 @@ export async function createEvent(title: string, description: string) {
     body: JSON.stringify({ title, description }),
   });
 
-  if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error ?? body?.message ?? `HTTP error! Status: ${response.status}`);
+  }
 
   const data = await response.json();
   return data;
