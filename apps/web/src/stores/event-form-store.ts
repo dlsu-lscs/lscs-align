@@ -6,22 +6,27 @@ const initialState = {
   title: '',
   description: '',
   scheduleType: 'dates_and_times' as ScheduleType, //placeholder, change when designer is done
+  selectedDates: [] as Date[],
 };
 
 type EventFormStore = {
   title: string;
   description: string;
+  scheduleType: ScheduleType;
+  selectedDates: Date[];
+
+  reset: () => void;
   setTitle: (title: string) => void;
   setDescription: (description: string) => void;
-  scheduleType: ScheduleType;
   setScheduleType: (scheduleType: ScheduleType) => void;
-  reset: () => void;
+  setSelectedDates: (dates: Date[]) => void;
 };
 
 export const useEventFormStore = create<EventFormStore>((set) => ({
   ...initialState,
+  reset: () => set(initialState),
   setTitle: (title) => set({ title }),
   setDescription: (description) => set({ description }),
   setScheduleType: (scheduleType) => set({ scheduleType }),
-  reset: () => set(initialState),
+  setSelectedDates: (selectedDates) => set({ selectedDates }),
 }));
