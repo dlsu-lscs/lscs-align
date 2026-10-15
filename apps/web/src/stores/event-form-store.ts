@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type ScheduleType = 'dates_only' | 'dates_and_times' | 'days_of_week';
+export type ScheduleType = 'dates_only' | 'dates_and_times' | 'days_of_week';
 
 const initialState = {
   title: '',
