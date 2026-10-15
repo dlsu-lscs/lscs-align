@@ -1,26 +1,21 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
-import { createEvent } from '@/lib/api/events';
 import { useState } from 'react';
+import { useEventFormStore } from '@/stores/event-form-store';
+import { useRouter } from 'next/navigation';
+
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useEventFormStore } from '@/stores/event-form-store';
 
 export default function NewEventPage() {
+  const router = useRouter();
   const title = useEventFormStore((s) => s.title);
   const description = useEventFormStore((s) => s.description);
-  const reset = useEventFormStore((s) => s.reset);
   const setTitle = useEventFormStore((s) => s.setTitle);
   const setDescription = useEventFormStore((s) => s.setDescription);
   const [nameError, setNameError] = useState('');
-
-  const { mutate, isPending, isSuccess, isError, error } = useMutation({
-    mutationFn: ({ title, description }: { title: string; description: string }) =>
-      createEvent(title, description),
-  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,14 +33,7 @@ export default function NewEventPage() {
 
     if (hasError) return;
 
-    mutate(
-      { title, description },
-      {
-        onSuccess: () => {
-          reset();
-        },
-      },
-    );
+    router.push('/events/new/schedule');
   };
 
   return (
@@ -82,12 +70,9 @@ export default function NewEventPage() {
           />
         </Field>
 
-        <Button type="submit" className="w-full sm:w-auto" disabled={isPending}>
-          {isPending ? 'Creating...' : 'Next'}
+        <Button type="submit" className="w-full sm:w-auto">
+          Next
         </Button>
-
-        {isSuccess && <p className="text-sm text-green-600">Event created!</p>}
-        {isError && <p className="text-sm text-red-600">Error: {error.message}</p>}
       </form>
     </main>
   );
