@@ -7,12 +7,15 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useEventFormStore } from '@/stores/event-form-store';
 
 export default function NewEventPage() {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const title = useEventFormStore((s) => s.title);
+  const description = useEventFormStore((s) => s.description);
+  const reset = useEventFormStore((s) => s.reset);
+  const setTitle = useEventFormStore((s) => s.setTitle);
+  const setDescription = useEventFormStore((s) => s.setDescription);
   const [nameError, setNameError] = useState('');
-  const [descError, setDescError] = useState('');
 
   const { mutate, isPending, isSuccess, isError, error } = useMutation({
     mutationFn: ({ title, description }: { title: string; description: string }) =>
@@ -24,7 +27,6 @@ export default function NewEventPage() {
 
     let hasError = false;
     setNameError('');
-    setDescError('');
 
     if (title.trim().length === 0) {
       setNameError('Please enter an event name.');
@@ -40,8 +42,7 @@ export default function NewEventPage() {
       { title, description },
       {
         onSuccess: () => {
-          setTitle('');
-          setDescription('');
+          reset();
         },
       },
     );
