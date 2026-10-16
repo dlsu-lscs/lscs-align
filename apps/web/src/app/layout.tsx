@@ -5,6 +5,7 @@ import './globals.css';
 
 import { Jost } from 'next/font/google';
 import Header from '@/components/layout/header';
+import Footer from '@/components/layout/footer';
 
 const jost = Jost({
   subsets: ['latin'],
@@ -22,10 +23,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="en" className={jost.variable}>
-      <body>
+      <body className="flex min-h-screen flex-col">
         <Providers>
           <Header />
-          {children}
+          <div className="flex-1">{children}</div>
+          <Footer />
         </Providers>
       </body>
     </html>
