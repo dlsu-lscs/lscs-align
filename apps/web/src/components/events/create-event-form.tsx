@@ -13,7 +13,7 @@ export default function CreateEventForm() {
   const [description, setDescription] = useState('');
   const [nameError, setNameError] = useState('');
 
-  const { mutate, isPending, isSuccess, isError, error } = useMutation({
+  const { mutate, reset, isPending, isSuccess, isError, error } = useMutation({
     mutationFn: ({ title, description }: { title: string; description: string }) =>
       createEvent(title, description),
   });
@@ -40,20 +40,25 @@ export default function CreateEventForm() {
         onSuccess: () => {
           setTitle('');
           setDescription('');
+          setTimeout(() => reset(), 2000);
         },
       },
     );
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form
+      onSubmit={handleSubmit}
+      className="mx-auto w-full max-w-[549px] space-y-5 px-4 py-6 sm:px-[34px] sm:py-[31px]"
+    >
       <Field>
-        <FieldLabel htmlFor="title" className="text-2xl font-semibold">
+        <FieldLabel
+          htmlFor="title"
+          className="text-[28px] sm:text-[40px] sm:whitespace-nowrap leading-none tracking-tighter font-normal"
+        >
           What is your event name?
           <span className="text-red-600">*</span>
         </FieldLabel>
-
-        {nameError && <p className="text-sm text-red-600">{nameError}</p>}
 
         <Input
           type="text"
@@ -61,12 +66,18 @@ export default function CreateEventForm() {
           placeholder="Event Name"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="rounded-lg px-3 py-2"
+          className="h-[60px] w-full rounded-[10px] border border-[#777777] px-3
+                    placeholder:text-[#777777]"
         />
+
+        {nameError && <p className="text-sm text-red-600">{nameError}</p>}
       </Field>
 
       <Field>
-        <FieldLabel htmlFor="description" className="text-2xl font-semibold">
+        <FieldLabel
+          htmlFor="description"
+          className="text-[28px] sm:text-[40px] sm:whitespace-nowrap leading-none tracking-tighter font-normal"
+        >
           What is your event description?
         </FieldLabel>
         <Textarea
@@ -74,11 +85,20 @@ export default function CreateEventForm() {
           placeholder="Event Description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="rounded-lg px-3 py-2"
+          className="h-[153px] w-full rounded-[10px] border border-[#777777] px-3 py-2 resize-none
+                    placeholder:text-[#777777]"
         />
       </Field>
 
-      <Button type="submit" className="w-full sm:w-auto" disabled={isPending}>
+      <Button
+        type="submit"
+        disabled={isPending}
+        className={`h-[50px] w-full rounded-[10px] border sm:w-[129px] ${
+          title.trim().length > 0
+            ? 'border-brand bg-brand text-white hover:bg-brand'
+            : 'border-ink bg-transparent text-ink hover:bg-transparent'
+        }`}
+      >
         {isPending ? 'Creating...' : 'Next'}
       </Button>
 
