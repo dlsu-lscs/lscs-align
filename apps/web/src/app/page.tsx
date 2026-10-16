@@ -1,3 +1,9 @@
+import CreateEventForm from '@/components/events/create-event-form';
+
 export default function HomePage() {
-  return <h1>{'ALIGN  Development Environment'}</h1>;
+  return (
+    <main className="mx-auto w-full max-w-md p-4">
+      <CreateEventForm />
+    </main>
+  );
 }
