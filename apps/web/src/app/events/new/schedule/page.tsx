@@ -2,6 +2,7 @@
 
 import { useEventFormStore, type ScheduleType } from '@/stores/event-form-store';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Calendar } from '@/components/ui/calendar';
 
 export default function SchedulePage() {
   const scheduleType = useEventFormStore((s) => s.scheduleType);
@@ -22,6 +23,8 @@ export default function SchedulePage() {
         <ToggleGroupItem value="days_of_week">Days of Week</ToggleGroupItem>
         <ToggleGroupItem value="dates_only">Dates Only</ToggleGroupItem>
       </ToggleGroup>
+
+      <Calendar mode="multiple" className="rounded-lg border" />
     </main>
   );
 }
