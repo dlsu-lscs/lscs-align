@@ -3,6 +3,7 @@
 import { useEventFormStore, type ScheduleType } from '@/stores/event-form-store';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -13,6 +14,10 @@ export default function SchedulePage() {
   const setSelectedDates = useEventFormStore((s) => s.setSelectedDates);
   const selectedWeekdays = useEventFormStore((s) => s.selectedWeekdays);
   const setSelectedWeekdays = useEventFormStore((s) => s.setSelectedWeekdays);
+  const startTime = useEventFormStore((s) => s.startTime);
+  const setStartTime = useEventFormStore((s) => s.setStartTime);
+  const endTime = useEventFormStore((s) => s.endTime);
+  const setEndTime = useEventFormStore((s) => s.setEndTime);
 
   return (
     <main className="mx-auto w-full max-w-xl p-4">
@@ -52,6 +57,29 @@ export default function SchedulePage() {
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+      )}
+
+      {scheduleType !== 'dates_only' && (
+        <div className="mt-4 flex gap-4">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="start-time">Start Time</label>
+            <Input
+              id="start-time"
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="end-time">End Time</label>
+            <Input
+              id="end-time"
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+            />
+          </div>
+        </div>
       )}
     </main>
   );
