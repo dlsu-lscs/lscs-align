@@ -56,8 +56,10 @@ export default function CreateEventForm() {
           htmlFor="title"
           className="text-[28px] sm:text-[40px] sm:whitespace-nowrap leading-none tracking-tighter font-normal"
         >
-          What is your event name?
-          <span className="text-red-600">*</span>
+          <span>
+            What is your event name?
+            <span className="text-red-600">*</span>
+          </span>
         </FieldLabel>
 
         <Input
