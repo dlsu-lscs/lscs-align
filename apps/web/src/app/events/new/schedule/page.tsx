@@ -7,6 +7,8 @@ import { Calendar } from '@/components/ui/calendar';
 export default function SchedulePage() {
   const scheduleType = useEventFormStore((s) => s.scheduleType);
   const setScheduleType = useEventFormStore((s) => s.setScheduleType);
+  const selectedDates = useEventFormStore((s) => s.selectedDates);
+  const setSelectedDates = useEventFormStore((s) => s.setSelectedDates);
 
   return (
     <main className="mx-auto w-full max-w-xl p-4">
@@ -24,7 +26,14 @@ export default function SchedulePage() {
         <ToggleGroupItem value="dates_only">Dates Only</ToggleGroupItem>
       </ToggleGroup>
 
-      <Calendar mode="multiple" className="rounded-lg border" />
+      {(scheduleType === 'dates_only' || scheduleType === 'dates_and_times') && (
+        <Calendar
+          mode="multiple"
+          className="rounded-lg border"
+          selected={selectedDates}
+          onSelect={(dates) => setSelectedDates(dates ?? [])}
+        />
+      )}
     </main>
   );
 }
