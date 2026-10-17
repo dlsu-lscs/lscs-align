@@ -4,11 +4,15 @@ import { useEventFormStore, type ScheduleType } from '@/stores/event-form-store'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calendar } from '@/components/ui/calendar';
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 export default function SchedulePage() {
   const scheduleType = useEventFormStore((s) => s.scheduleType);
   const setScheduleType = useEventFormStore((s) => s.setScheduleType);
   const selectedDates = useEventFormStore((s) => s.selectedDates);
   const setSelectedDates = useEventFormStore((s) => s.setSelectedDates);
+  const selectedWeekdays = useEventFormStore((s) => s.selectedWeekdays);
+  const setSelectedWeekdays = useEventFormStore((s) => s.setSelectedWeekdays);
 
   return (
     <main className="mx-auto w-full max-w-xl p-4">
@@ -33,6 +37,21 @@ export default function SchedulePage() {
           selected={selectedDates}
           onSelect={(dates) => setSelectedDates(dates ?? [])}
         />
+      )}
+
+      {scheduleType === 'days_of_week' && (
+        <ToggleGroup
+          variant="outline"
+          multiple
+          value={selectedWeekdays.map(String)}
+          onValueChange={(values) => setSelectedWeekdays(values.map(Number))}
+        >
+          {WEEKDAYS.map((label, index) => (
+            <ToggleGroupItem key={label} value={String(index)}>
+              {label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       )}
     </main>
   );
