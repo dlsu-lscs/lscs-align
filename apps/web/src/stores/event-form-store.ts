@@ -8,6 +8,8 @@ const initialState = {
   scheduleType: 'dates_and_times' as ScheduleType, //placeholder, change when designer is done
   selectedDates: [] as Date[],
   selectedWeekdays: [] as number[],
+  startTime: '09:00', //placeholder
+  endTime: '17:00', //placeholder
 };
 
 type EventFormStore = {
@@ -16,6 +18,8 @@ type EventFormStore = {
   scheduleType: ScheduleType;
   selectedDates: Date[];
   selectedWeekdays: number[];
+  startTime: string;
+  endTime: string;
 
   reset: () => void;
   setTitle: (title: string) => void;
@@ -23,6 +27,8 @@ type EventFormStore = {
   setScheduleType: (scheduleType: ScheduleType) => void;
   setSelectedDates: (dates: Date[]) => void;
   setSelectedWeekdays: (weekdays: number[]) => void;
+  setStartTime: (startTime: string) => void;
+  setEndTime: (endTime: string) => void;
 };
 
 export const useEventFormStore = create<EventFormStore>((set) => ({
@@ -33,4 +39,6 @@ export const useEventFormStore = create<EventFormStore>((set) => ({
   setScheduleType: (scheduleType) => set({ scheduleType }),
   setSelectedDates: (selectedDates) => set({ selectedDates }),
   setSelectedWeekdays: (selectedWeekdays) => set({ selectedWeekdays }),
+  setStartTime: (startTime) => set({ startTime }),
+  setEndTime: (endTime) => set({ endTime }),
 }));
