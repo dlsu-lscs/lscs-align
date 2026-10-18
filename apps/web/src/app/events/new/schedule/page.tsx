@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useEventFormStore, type ScheduleType } from '@/stores/event-form-store';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -18,6 +20,31 @@ export default function SchedulePage() {
   const setStartTime = useEventFormStore((s) => s.setStartTime);
   const endTime = useEventFormStore((s) => s.endTime);
   const setEndTime = useEventFormStore((s) => s.setEndTime);
+
+  const [dateError, setDateError] = useState('');
+  const [timeError, setTimeError] = useState('');
+
+  const handleNext = () => {
+    let hasError = false;
+    setDateError('');
+    setTimeError('');
+
+    if (scheduleType === 'days_of_week') {
+      if (selectedWeekdays.length === 0 || selectedDates.length === 0) {
+        setDateError('Please select a date/dates.');
+        hasError = true;
+      }
+    }
+
+    if (scheduleType !== 'dates_only' && endTime <= startTime) {
+      setTimeError('Please enter possible times.');
+      hasError = true;
+    }
+
+    if (hasError) return;
+
+    console.log({ scheduleType, selectedDates, selectedWeekdays, startTime, endTime });
+  };
 
   return (
     <main className="mx-auto w-full max-w-xl p-4">
@@ -59,6 +86,8 @@ export default function SchedulePage() {
         </ToggleGroup>
       )}
 
+      {dateError && <p className="mt-2 text-sm text-red-600">{dateError}</p>}
+
       {scheduleType !== 'dates_only' && (
         <div className="mt-4 flex gap-4">
           <div className="flex flex-col gap-1">
@@ -81,6 +110,12 @@ export default function SchedulePage() {
           </div>
         </div>
       )}
+
+      {timeError && <p className="mt-2 text-sm text-red-600">{timeError}</p>}
+
+      <Button type="button" className="mt-6" onClick={handleNext}>
+        Next
+      </Button>
     </main>
   );
 }
