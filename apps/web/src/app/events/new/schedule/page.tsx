@@ -31,6 +31,8 @@ export default function SchedulePage() {
   const setStartTime = useEventFormStore((s) => s.setStartTime);
   const endTime = useEventFormStore((s) => s.endTime);
   const setEndTime = useEventFormStore((s) => s.setEndTime);
+  const slotIntervalMinutes = useEventFormStore((s) => s.slotIntervalMinutes);
+  const setSlotIntervalMinutes = useEventFormStore((s) => s.setSlotIntervalMinutes);
 
   const [dateError, setDateError] = useState('');
   const [timeError, setTimeError] = useState('');
@@ -74,6 +76,7 @@ export default function SchedulePage() {
         daily_start_minute: hasTimes ? toMinutes(startTime) : null,
         daily_end_minute: hasTimes ? toMinutes(endTime) : null,
         time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        slot_interval_minutes: slotIntervalMinutes,
       },
       {
         onSuccess: (data) => {
@@ -189,6 +192,28 @@ export default function SchedulePage() {
       )}
 
       {timeError && <p className="mt-2 text-sm text-error">{timeError}</p>}
+
+      {scheduleType !== 'dates_only' && (
+        <ToggleGroup
+          variant="outline"
+          className="mt-6 flex w-full gap-5"
+          value={[String(slotIntervalMinutes)]}
+          onValueChange={(values) => {
+            const next = values[0];
+            if (next) setSlotIntervalMinutes(Number(next));
+          }}
+        >
+          {[15, 30, 60].map((min) => (
+            <ToggleGroupItem
+              key={min}
+              value={String(min)}
+              className="h-[50px] flex-1 rounded-[10px]! border border-ink text-[24px]"
+            >
+              {min} min
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      )}
 
       <Button
         type="button"
