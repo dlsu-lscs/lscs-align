@@ -1,10 +1,21 @@
-export async function createEvent(title: string, description: string) {
+export type CreateEventPayload = {
+  title: string;
+  description: string;
+  schedule_type: 'dates_only' | 'dates_and_times' | 'days_of_week';
+  dates: string[];
+  weekdays: number[];
+  daily_start_minute: number | null;
+  daily_end_minute: number | null;
+  time_zone: string;
+};
+
+export async function createEvent(payload: CreateEventPayload) {
   const response = await fetch('/api/events', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ title, description }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
