@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useEventFormStore, type ScheduleType } from '@/stores/event-form-store';
 import { toMinutes } from '@/lib/time';
+import { format } from 'date-fns';
 
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Calendar } from '@/components/ui/calendar';
@@ -50,6 +51,7 @@ export default function SchedulePage() {
 
     console.log({ scheduleType, selectedDates, selectedWeekdays, startTime, endTime });
     console.log(toMinutes(startTime), toMinutes(endTime));
+    console.log(selectedDates.map((d) => format(d, 'yyyy-MM-dd')));
   };
 
   return (
