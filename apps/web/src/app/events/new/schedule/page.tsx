@@ -30,10 +30,13 @@ export default function SchedulePage() {
     setTimeError('');
 
     if (scheduleType === 'days_of_week') {
-      if (selectedWeekdays.length === 0 || selectedDates.length === 0) {
+      if (selectedWeekdays.length === 0) {
         setDateError('Please select a date/dates.');
         hasError = true;
       }
+    } else if (selectedDates.length === 0) {
+      setDateError('Please select a date/dates.');
+      hasError = true;
     }
 
     if (scheduleType !== 'dates_only' && endTime <= startTime) {
