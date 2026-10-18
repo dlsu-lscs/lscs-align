@@ -5,7 +5,7 @@ export type ScheduleType = 'dates_only' | 'dates_and_times' | 'days_of_week';
 const initialState = {
   title: '',
   description: '',
-  scheduleType: 'dates_and_times' as ScheduleType, //placeholder, change when designer is done
+  scheduleType: 'dates_only' as ScheduleType, //placeholder
   selectedDates: [] as Date[],
   selectedWeekdays: [] as number[],
   startTime: '09:00', //placeholder
