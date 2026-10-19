@@ -1,0 +1,131 @@
+name: Align Manual Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected environment to roll back
+        required: true
+        type: choice
+        options: [staging, production]
+      source_commit:
+        description: Known-good 40-character main commit
+        required: true
+        type: string
+      release_run_id:
+        description: Trusted release workflow run containing the manifest
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: align-deployment-pipeline
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Verify and Roll Back ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment == 'staging' && 'https://staging-align.dlsu-lscs.org' || 'https://align.dlsu-lscs.org' }}
+    steps:
+      - name: Check out trusted main history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Install locked deployment tooling
+        run: npm ci --ignore-scripts
+
+      - name: Download the known-good release manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: align-release-${{ inputs.source_commit }}
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify the manifest and trusted main ancestry
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          MANIFEST_COMMIT="$(node -e "import('./scripts/release/manifest.mjs').then(async m => console.log((await m.readReleaseManifest('release-manifest.json')).sourceCommit))")"
+          test "$MANIFEST_COMMIT" = "$SOURCE_COMMIT"
+          git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
+
+      - name: Select the approved origin
+        id: target
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          if [ "$TARGET_ENVIRONMENT" = staging ]; then
+            echo "origin=https://staging-align.dlsu-lscs.org" >> "$GITHUB_OUTPUT"
+          else
+            echo "origin=https://align.dlsu-lscs.org" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Refuse a schema-incompatible rollback
+        env:
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: >-
+          node scripts/deploy/schema-compatibility.mjs
+          --manifest release-manifest.json
+          --environment "${{ inputs.environment }}"
+          --origin "${{ steps.target.outputs.origin }}"
+
+      - name: Back up production before rollback
+        if: ${{ inputs.environment == 'production' }}
+        env:
+          DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+          DOKPLOY_BACKUP_ID: ${{ vars.DOKPLOY_BACKUP_ID }}
+          DOKPLOY_BACKUP_DESTINATION_ID: ${{ vars.DOKPLOY_BACKUP_DESTINATION_ID }}
+          DOKPLOY_BACKUP_SEARCH: ${{ vars.DOKPLOY_BACKUP_SEARCH }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+        run: node scripts/deploy/backup.mjs
+
+      - name: Render the known-good release
+        run: >-
+          node scripts/deploy/render-compose.mjs
+          --template compose.yaml
+          --manifest release-manifest.json
+          --bootstrap docker/postgres/001-bootstrap.sh
+          --target "${{ inputs.environment }}"
+          --output release-compose.yaml
+
+      - name: Deploy the known-good image digests
+        id: deploy
+        env:
+          DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+          DOKPLOY_COMPOSE_ID: ${{ vars.DOKPLOY_COMPOSE_ID }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+        run: >-
+          node scripts/deploy/dokploy.mjs
+          --compose release-compose.yaml
+          --title "Align ${{ inputs.environment }} rollback ${{ inputs.source_commit }}"
+          --description "Approved known-good release rollback"
+
+      - name: Verify the rollback externally
+        id: smoke
+        env:
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: >-
+          node scripts/deploy/smoke.mjs
+          --manifest release-manifest.json
+          --environment "${{ inputs.environment }}"
+          --origin "${{ steps.target.outputs.origin }}"

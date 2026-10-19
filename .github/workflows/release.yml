@@ -1,0 +1,289 @@
+name: Align Trusted Release
+
+on:
+  workflow_run:
+    workflows: [Align CI & DevSecOps Gate]
+    branches: [main]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: align-deployment-pipeline
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    name: Build Immutable Release
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      source_commit: ${{ steps.release.outputs.source_commit }}
+      web_image: ${{ steps.release.outputs.web_image }}
+      api_image: ${{ steps.release.outputs.api_image }}
+      schema_version: ${{ steps.release.outputs.schema_version }}
+    steps:
+      - name: Check out the exact validated main revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Authenticate to GHCR with the workflow token
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build once, publish immutable images, and create release manifest
+        id: release
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          CI_RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          WEB_TAG="ghcr.io/dlsu-lscs/lscs-align-web:sha-${SOURCE_COMMIT}"
+          API_TAG="ghcr.io/dlsu-lscs/lscs-align-api:sha-${SOURCE_COMMIT}"
+
+          web_exists=0
+          api_exists=0
+          docker buildx imagetools inspect "$WEB_TAG" >/dev/null 2>&1 && web_exists=1
+          docker buildx imagetools inspect "$API_TAG" >/dev/null 2>&1 && api_exists=1
+          if [ "$web_exists" -ne "$api_exists" ]; then
+            echo "Refusing to continue with a partial release" >&2
+            exit 1
+          fi
+
+          if [ "$web_exists" -eq 0 ]; then
+            docker buildx create --use --name align-release-builder
+            docker buildx build --build-arg SOURCE_COMMIT="$SOURCE_COMMIT" \
+              --file apps/web/Dockerfile --tag "$WEB_TAG" --provenance=mode=max --sbom=true \
+              --metadata-file web-metadata.json --push .
+            docker buildx build --build-arg SOURCE_COMMIT="$SOURCE_COMMIT" \
+              --file apps/api/Dockerfile --tag "$API_TAG" --provenance=mode=max --sbom=true \
+              --metadata-file api-metadata.json --push .
+            WEB_DIGEST="$(jq -r '."containerimage.digest"' web-metadata.json)"
+            API_DIGEST="$(jq -r '."containerimage.digest"' api-metadata.json)"
+          else
+            WEB_DIGEST="$(docker buildx imagetools inspect "$WEB_TAG" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+            API_DIGEST="$(docker buildx imagetools inspect "$API_TAG" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+          fi
+
+          [[ "$WEB_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$API_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          SCHEMA_VERSION="$(find apps/api/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort | tail -n 1 | cut -d_ -f1)"
+          BUILT_AT="$(date -u '+%Y-%m-%dT%H:%M:%S.000Z')"
+
+          node scripts/release/manifest.mjs \
+            --output release-manifest.json \
+            --source-commit "$SOURCE_COMMIT" \
+            --web-image "ghcr.io/dlsu-lscs/lscs-align-web@${WEB_DIGEST}" \
+            --api-image "ghcr.io/dlsu-lscs/lscs-align-api@${API_DIGEST}" \
+            --schema-version "$SCHEMA_VERSION" \
+            --ci-run-url "$CI_RUN_URL" \
+            --built-at "$BUILT_AT"
+
+          {
+            echo "source_commit=$SOURCE_COMMIT"
+            echo "web_image=ghcr.io/dlsu-lscs/lscs-align-web@${WEB_DIGEST}"
+            echo "api_image=ghcr.io/dlsu-lscs/lscs-align-api@${API_DIGEST}"
+            echo "schema_version=$SCHEMA_VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Retain the immutable release manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: align-release-${{ github.event.workflow_run.head_sha }}
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy-staging:
+    name: Deploy and Verify Staging
+    needs: build-release
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+    environment:
+      name: staging
+      url: https://staging-align.dlsu-lscs.org
+    steps:
+      - name: Check out the exact release tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build-release.outputs.source_commit }}
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Install locked deployment tooling
+        run: npm ci --ignore-scripts
+
+      - name: Download the immutable release manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: align-release-${{ needs.build-release.outputs.source_commit }}
+
+      - name: Render the staging deployment without runtime secrets
+        run: >-
+          node scripts/deploy/render-compose.mjs
+          --template compose.yaml
+          --manifest release-manifest.json
+          --bootstrap docker/postgres/001-bootstrap.sh
+          --target staging
+          --output release-compose.yaml
+
+      - name: Deploy the exact release to staging
+        id: deploy
+        env:
+          DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+          DOKPLOY_COMPOSE_ID: ${{ vars.DOKPLOY_COMPOSE_ID }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+        run: >-
+          node scripts/deploy/dokploy.mjs
+          --compose release-compose.yaml
+          --title "Align staging ${{ needs.build-release.outputs.source_commit }}"
+          --description "Trusted main release ${{ needs.build-release.outputs.source_commit }}"
+
+      - name: Verify staging externally
+        id: smoke
+        env:
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: >-
+          node scripts/deploy/smoke.mjs
+          --manifest release-manifest.json
+          --environment staging
+          --origin https://staging-align.dlsu-lscs.org
+
+      - name: Notify the team of the staging result
+        if: ${{ always() }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DEPLOYMENT_STATUS: ${{ job.status }}
+          MIGRATION_RESULT: ${{ steps.smoke.outcome == 'success' && 'verified' || 'failed_or_unverified' }}
+          SOURCE_COMMIT: ${{ needs.build-release.outputs.source_commit }}
+          WEB_IMAGE: ${{ needs.build-release.outputs.web_image }}
+          API_IMAGE: ${{ needs.build-release.outputs.api_image }}
+          WORKFLOW_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OPERATOR: ${{ github.actor }}
+        run: >-
+          node scripts/deploy/notify.mjs
+          --environment staging
+          --status "$DEPLOYMENT_STATUS"
+          --source-commit "$SOURCE_COMMIT"
+          --web-image "$WEB_IMAGE"
+          --api-image "$API_IMAGE"
+          --migration-result "$MIGRATION_RESULT"
+          --workflow-url "$WORKFLOW_URL"
+          --operator "$OPERATOR"
+          --timestamp "$(date -u '+%Y-%m-%dT%H:%M:%S.000Z')"
+
+  promote-production:
+    name: Approve, Back Up, and Promote Production
+    needs: [build-release, deploy-staging]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+    environment:
+      name: production
+      url: https://align.dlsu-lscs.org
+    steps:
+      - name: Check out the exact release tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build-release.outputs.source_commit }}
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Install locked deployment tooling
+        run: npm ci --ignore-scripts
+
+      - name: Download the staging-proven release manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: align-release-${{ needs.build-release.outputs.source_commit }}
+
+      - name: Verify a new pre-deployment production backup
+        env:
+          DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+          DOKPLOY_BACKUP_ID: ${{ vars.DOKPLOY_BACKUP_ID }}
+          DOKPLOY_BACKUP_DESTINATION_ID: ${{ vars.DOKPLOY_BACKUP_DESTINATION_ID }}
+          DOKPLOY_BACKUP_SEARCH: ${{ vars.DOKPLOY_BACKUP_SEARCH }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+        run: node scripts/deploy/backup.mjs
+
+      - name: Render the production deployment without runtime secrets
+        run: >-
+          node scripts/deploy/render-compose.mjs
+          --template compose.yaml
+          --manifest release-manifest.json
+          --bootstrap docker/postgres/001-bootstrap.sh
+          --target production
+          --output release-compose.yaml
+
+      - name: Promote the exact staging-proven release to production
+        id: deploy
+        env:
+          DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+          DOKPLOY_COMPOSE_ID: ${{ vars.DOKPLOY_COMPOSE_ID }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+        run: >-
+          node scripts/deploy/dokploy.mjs
+          --compose release-compose.yaml
+          --title "Align production ${{ needs.build-release.outputs.source_commit }}"
+          --description "Staging-proven release ${{ needs.build-release.outputs.source_commit }}"
+
+      - name: Verify production externally
+        id: smoke
+        run: >-
+          node scripts/deploy/smoke.mjs
+          --manifest release-manifest.json
+          --environment production
+          --origin https://align.dlsu-lscs.org
+
+      - name: Notify the team of the production result
+        if: ${{ always() }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DEPLOYMENT_STATUS: ${{ job.status }}
+          MIGRATION_RESULT: ${{ steps.smoke.outcome == 'success' && 'verified' || 'failed_or_unverified' }}
+          SOURCE_COMMIT: ${{ needs.build-release.outputs.source_commit }}
+          WEB_IMAGE: ${{ needs.build-release.outputs.web_image }}
+          API_IMAGE: ${{ needs.build-release.outputs.api_image }}
+          WORKFLOW_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OPERATOR: ${{ github.actor }}
+        run: >-
+          node scripts/deploy/notify.mjs
+          --environment production
+          --status "$DEPLOYMENT_STATUS"
+          --source-commit "$SOURCE_COMMIT"
+          --web-image "$WEB_IMAGE"
+          --api-image "$API_IMAGE"
+          --migration-result "$MIGRATION_RESULT"
+          --workflow-url "$WORKFLOW_URL"
+          --operator "$OPERATOR"
+          --timestamp "$(date -u '+%Y-%m-%dT%H:%M:%S.000Z')"

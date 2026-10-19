@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a reproducible defect that does not contain sensitive information.
+title: '[BUG] '
+body:
+  - type: textarea
+    id: impact
+    attributes:
+      label: User impact
+      description: Who is affected and what cannot be completed?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Provide deterministic steps using non-sensitive test data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: security
+    attributes:
+      label: Security impact
+      description: If this may be exploitable, stop and use the private security contact.
+      options:
+        - None known
+        - Unsure — needs private triage
+    validations:
+      required: true
