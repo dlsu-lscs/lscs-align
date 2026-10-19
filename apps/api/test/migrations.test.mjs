@@ -41,10 +41,15 @@ test('discoverMigrations returns ordered migrations with stable SHA-256 checksum
 
   assert.deepEqual(
     migrations.map(({ version, name }) => ({ version, name })),
-    [{ version: '0001', name: 'platform_baseline' }],
+    [
+      { version: '0001', name: 'platform_baseline' },
+      { version: '0002', name: 'core_scheduling' },
+    ],
   );
   assert.match(migrations[0].checksum, /^[0-9a-f]{64}$/);
   assert.match(migrations[0].sql, /platform_metadata/);
+  assert.match(migrations[1].checksum, /^[0-9a-f]{64}$/);
+  assert.match(migrations[1].sql, /align\.events/);
 });
 
 test('discoverMigrations rejects duplicate versions before touching a database', async (t) => {
