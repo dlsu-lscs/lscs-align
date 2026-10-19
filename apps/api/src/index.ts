@@ -1,15 +1,16 @@
 import { createDatabasePool, createReadinessProbe, loadRuntimeDatabaseConfig } from './database.ts';
+import { createDatabase } from './lib/database.ts';
 import { createApiServer, loadApiConfig } from './server.ts';
 import { createApp } from './app.js';
 
 const config = loadApiConfig(process.env);
 const databaseConfig = loadRuntimeDatabaseConfig(process.env);
-const database = createDatabasePool(databaseConfig, 'align-api');
-const app = createApp();
+const pool = createDatabasePool(databaseConfig, 'align-api');
+const app = createApp({ database: createDatabase(pool) });
 await app.ready();
 const server = createApiServer({
   ...config,
-  readiness: createReadinessProbe(database, databaseConfig.expectedIdentity),
+  readiness: createReadinessProbe(pool, databaseConfig.expectedIdentity),
   appHandler: app.routing.bind(app),
 });
 
@@ -40,7 +41,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
         process.exitCode = 1;
         return;
       }
-      await database.end();
+      await pool.end();
       await app.close();
       process.exitCode = 0;
     });
