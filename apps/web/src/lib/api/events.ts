@@ -7,6 +7,7 @@ export type CreateEventPayload = {
   daily_start_minute: number | null;
   daily_end_minute: number | null;
   time_zone: string;
+  slot_interval_minutes: number;
 };
 
 export async function createEvent(payload: CreateEventPayload) {

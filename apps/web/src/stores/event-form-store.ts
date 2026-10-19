@@ -10,6 +10,7 @@ const initialState = {
   selectedWeekdays: [] as number[],
   startTime: '09:00', //placeholder
   endTime: '17:00', //placeholder
+  slotIntervalMinutes: 30,
 };
 
 type EventFormStore = {
@@ -20,6 +21,7 @@ type EventFormStore = {
   selectedWeekdays: number[];
   startTime: string;
   endTime: string;
+  slotIntervalMinutes: number;
 
   reset: () => void;
   setTitle: (title: string) => void;
@@ -29,6 +31,7 @@ type EventFormStore = {
   setSelectedWeekdays: (weekdays: number[]) => void;
   setStartTime: (startTime: string) => void;
   setEndTime: (endTime: string) => void;
+  setSlotIntervalMinutes: (minutes: number) => void;
 };
 
 export const useEventFormStore = create<EventFormStore>((set) => ({
@@ -41,4 +44,5 @@ export const useEventFormStore = create<EventFormStore>((set) => ({
   setSelectedWeekdays: (selectedWeekdays) => set({ selectedWeekdays }),
   setStartTime: (startTime) => set({ startTime }),
   setEndTime: (endTime) => set({ endTime }),
+  setSlotIntervalMinutes: (slotIntervalMinutes) => set({ slotIntervalMinutes }),
 }));
