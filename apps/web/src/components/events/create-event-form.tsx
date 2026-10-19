@@ -1,22 +1,21 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
-import { createEvent } from '@/lib/api/events';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEventFormStore } from '@/stores/event-form-store';
+
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 export default function CreateEventForm() {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const title = useEventFormStore((s) => s.title);
+  const description = useEventFormStore((s) => s.description);
+  const setTitle = useEventFormStore((s) => s.setTitle);
+  const setDescription = useEventFormStore((s) => s.setDescription);
   const [nameError, setNameError] = useState('');
-
-  const { mutate, reset, isPending, isSuccess, isError, error } = useMutation({
-    mutationFn: ({ title, description }: { title: string; description: string }) =>
-      createEvent(title, description),
-  });
+  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,16 +33,7 @@ export default function CreateEventForm() {
 
     if (hasError) return;
 
-    mutate(
-      { title, description },
-      {
-        onSuccess: () => {
-          setTitle('');
-          setDescription('');
-          setTimeout(() => reset(), 2000);
-        },
-      },
-    );
+    router.push('/events/new/schedule');
   };
 
   return (
@@ -94,18 +84,14 @@ export default function CreateEventForm() {
 
       <Button
         type="submit"
-        disabled={isPending}
         className={`h-[50px] w-full rounded-[10px] border sm:w-[129px] ${
           title.trim().length > 0
             ? 'border-brand bg-brand text-white hover:bg-brand'
             : 'border-ink bg-transparent text-ink hover:bg-transparent'
         }`}
       >
-        {isPending ? 'Creating...' : 'Next'}
+        Next
       </Button>
-
-      {isSuccess && <p className="text-sm text-green-600">Event created!</p>}
-      {isError && <p className="text-sm text-red-600">Error: {error.message}</p>}
     </form>
   );
 }
