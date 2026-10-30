@@ -38,6 +38,16 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
     return <main className="p-4 text-center">Something went wrong. Please try again.</main>;
   }
 
+  const gridAvail = {
+    schedule_type: data.schedule_type,
+    dates: data.dates,
+    weekdays: data.weekdays,
+    start_minute: data.daily_start_minute,
+    end_minute: data.daily_end_minute,
+    slot_interval_minutes: data.slot_interval_minutes,
+    time_zone: data.time_zone,
+  };
+
   return (
     <main className="p-4 text-center">
       <h1 className="text-2xl font-semibold">{data.title}</h1>
@@ -60,6 +70,8 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
       <p>{data.slot_interval_minutes} minute slots</p>
 
       {data.organizer && <p>Organized by {data.organizer.name}</p>}
+
+      <div data-grid-avail={JSON.stringify(gridAvail)} hidden />
     </main>
   );
 }
