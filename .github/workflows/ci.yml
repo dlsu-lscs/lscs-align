@@ -152,6 +152,7 @@ jobs:
           psql_admin -d postgres -c "CREATE ROLE align_test_app LOGIN PASSWORD 'align-ci-runtime-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
           psql_admin -d postgres -c "CREATE DATABASE align_test OWNER align_test_migrator"
           psql_admin -d postgres -c "ALTER DATABASE align_test SET align.environment = 'test'"
+          psql_admin -d postgres -c "ALTER DATABASE align_test SET align.runtime_role = 'align_test_app'"
           psql_admin -d align_test -c "REVOKE ALL ON DATABASE align_test FROM PUBLIC"
           psql_admin -d align_test -c "GRANT CONNECT ON DATABASE align_test TO align_test_migrator, align_test_app"
           psql_admin -d align_test -c "REVOKE CREATE ON SCHEMA public FROM PUBLIC"

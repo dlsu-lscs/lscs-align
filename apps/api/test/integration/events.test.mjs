@@ -8,32 +8,58 @@ import { createApp } from '../../src/app.ts';
 import { runMigrations } from '../../src/migrations.ts';
 
 const migrationDatabaseUrl = process.env.TEST_MIGRATION_DATABASE_URL;
+const runtimeDatabaseUrl = process.env.TEST_RUNTIME_DATABASE_URL;
 
-if (!migrationDatabaseUrl) {
-  throw new Error('TEST_MIGRATION_DATABASE_URL is required for integration tests');
+if (!migrationDatabaseUrl || !runtimeDatabaseUrl) {
+  throw new Error(
+    'TEST_MIGRATION_DATABASE_URL and TEST_RUNTIME_DATABASE_URL are required for integration tests',
+  );
 }
 
 const { Pool } = pg;
-const pool = new Pool({ connectionString: migrationDatabaseUrl, max: 4 });
+const migrationPool = new Pool({ connectionString: migrationDatabaseUrl, max: 4 });
+const runtimePool = new Pool({ connectionString: runtimeDatabaseUrl, max: 4 });
 const expectedIdentity = { environment: 'test', databaseName: 'align_test' };
 const migrationsDirectory = new URL('../../migrations/', import.meta.url);
 
 let app;
 
 test.before(async () => {
-  await pool.query('DROP SCHEMA IF EXISTS align CASCADE');
-  await runMigrations({ pool, expectedIdentity, migrationsDirectory });
-  app = createApp({ database: createDatabase(pool) });
+  await migrationPool.query('DROP SCHEMA IF EXISTS align CASCADE');
+
+  const configuredRole = await migrationPool.query(
+    "SELECT nullif(btrim(current_setting('align.runtime_role', true)), '') AS role",
+  );
+  if (!configuredRole.rows[0]?.role) {
+    const runtimeUser = decodeURIComponent(new URL(runtimeDatabaseUrl).username);
+    const client = await migrationPool.connect();
+    await client.query("SELECT set_config('align.runtime_role', $1, false)", [runtimeUser]);
+    await runMigrations({
+      pool: {
+        connect: async () => ({
+          query: (text, values) => client.query(text, values),
+          release: () => client.release(),
+        }),
+      },
+      expectedIdentity,
+      migrationsDirectory,
+    });
+  } else {
+    await runMigrations({ pool: migrationPool, expectedIdentity, migrationsDirectory });
+  }
+
+  app = createApp({ database: createDatabase(runtimePool) });
   await app.ready();
 });
 
 test.beforeEach(async () => {
-  await pool.query('TRUNCATE align.events CASCADE');
+  await runtimePool.query('DELETE FROM align.events');
 });
 
 test.after(async () => {
   await app?.close();
-  await pool.end();
+  await runtimePool.end();
+  await migrationPool.end();
 });
 
 function payload(overrides = {}) {
@@ -65,7 +91,7 @@ test('a dates-only event is persisted with its selected dates', async () => {
   assert.equal(body.slot_interval_minutes, 30);
   assert.equal(body.daily_start_minute, null);
 
-  const stored = await pool.query(
+  const stored = await runtimePool.query(
     'SELECT title, description, schedule_type, slot_interval_minutes, daily_start_minute FROM align.events',
   );
   assert.deepEqual(stored.rows, [
@@ -78,7 +104,7 @@ test('a dates-only event is persisted with its selected dates', async () => {
     },
   ]);
 
-  const dates = await pool.query(
+  const dates = await runtimePool.query(
     'SELECT calendar_date::text, weekday FROM align.event_dates ORDER BY calendar_date',
   );
   assert.deepEqual(dates.rows, [
@@ -98,7 +124,7 @@ test('a timed event stores its daily window in minutes', async () => {
 
   assert.equal(response.statusCode, 201);
 
-  const stored = await pool.query(
+  const stored = await runtimePool.query(
     'SELECT schedule_type, daily_start_minute, daily_end_minute FROM align.events',
   );
   assert.deepEqual(stored.rows, [
@@ -122,7 +148,7 @@ test('a recurring event stores weekdays instead of calendar dates', async () => 
   assert.deepEqual(body.weekdays, [1, 3, 5]);
   assert.deepEqual(body.dates, []);
 
-  const rows = await pool.query(
+  const rows = await runtimePool.query(
     'SELECT calendar_date, weekday FROM align.event_dates ORDER BY weekday',
   );
   assert.deepEqual(rows.rows, [
@@ -138,7 +164,7 @@ test('an empty description is stored as null rather than an empty string', async
   assert.equal(response.statusCode, 201);
   assert.equal(response.json().description, null);
 
-  const stored = await pool.query('SELECT description FROM align.events');
+  const stored = await runtimePool.query('SELECT description FROM align.events');
   assert.deepEqual(stored.rows, [{ description: null }]);
 });
 
@@ -149,7 +175,7 @@ test('two events may claim the same calendar date', async () => {
   assert.equal(first.statusCode, 201);
   assert.equal(second.statusCode, 201);
 
-  const counts = await pool.query('SELECT count(*)::integer AS events FROM align.events');
+  const counts = await runtimePool.query('SELECT count(*)::integer AS events FROM align.events');
   assert.equal(counts.rows[0].events, 2);
 });
 
@@ -158,6 +184,35 @@ test('a rejected payload writes nothing', async () => {
 
   assert.equal(response.statusCode, 400);
 
-  const counts = await pool.query('SELECT count(*)::integer AS events FROM align.events');
+  const counts = await runtimePool.query('SELECT count(*)::integer AS events FROM align.events');
   assert.equal(counts.rows[0].events, 0);
+});
+
+test('the runtime role can update and delete event rows without DDL or migration write access', async () => {
+  const created = await post(payload());
+  assert.equal(created.statusCode, 201);
+  const eventId = created.json().id;
+
+  const updated = await runtimePool.query(
+    'UPDATE align.events SET title = $1 WHERE id = $2 RETURNING title',
+    ['Updated sync', eventId],
+  );
+  assert.deepEqual(updated.rows, [{ title: 'Updated sync' }]);
+
+  const deletedDates = await runtimePool.query(
+    'DELETE FROM align.event_dates WHERE event_id = $1 RETURNING id',
+    [eventId],
+  );
+  assert.equal(deletedDates.rowCount, 2);
+
+  await assert.rejects(
+    runtimePool.query(
+      "INSERT INTO align.schema_migrations(version, name, checksum) VALUES ('9999', 'forged', repeat('0', 64))",
+    ),
+    (error) => error.code === '42501',
+  );
+  await assert.rejects(
+    runtimePool.query('DROP TABLE align.events'),
+    (error) => error.code === '42501',
+  );
 });
