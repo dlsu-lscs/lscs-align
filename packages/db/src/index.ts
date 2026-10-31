@@ -7,3 +7,5 @@ export * from './schema.ts';
 export function createDatabase(pool: Pool) {
   return drizzle(pool, { schema });
 }
+
+export type Database = ReturnType<typeof createDatabase>;
