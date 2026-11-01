@@ -136,8 +136,8 @@ export default function SchedulePage() {
           mode="multiple"
           className="mx-auto mt-3 w-full max-w-[533px] [--cell-size:--spacing(14)]"
           classNames={{
-            day_button: `rounded-[10px] border-0! ring-0! outline-none! 
-              hover:bg-brand-hover! hover:text-white! 
+            day_button: `rounded-[10px] border-0! ring-0! outline-none!
+              hover:bg-brand-hover! hover:text-white!
               data-[selected-single=true]:bg-brand! data-[selected-single=true]:text-white!
               aria-selected:bg-brand! aria-selected:text-white!`,
             weekdays: 'flex',
@@ -194,32 +194,37 @@ export default function SchedulePage() {
       {timeError && <p className="mt-2 text-sm text-error">{timeError}</p>}
 
       {scheduleType !== 'dates_only' && (
-        <ToggleGroup
-          variant="outline"
-          className="mt-6 flex w-full gap-5"
-          value={[String(slotIntervalMinutes)]}
-          onValueChange={(values) => {
-            const next = values[0];
-            if (next) setSlotIntervalMinutes(Number(next));
-          }}
-        >
-          {[15, 30, 60].map((min) => (
-            <ToggleGroupItem
-              key={min}
-              value={String(min)}
-              className="h-[50px] flex-1 rounded-[10px]! border border-ink text-[24px]"
-            >
-              {min} min
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <>
+          <ToggleGroup
+            variant="outline"
+            className="mt-6 flex w-full gap-5"
+            value={[String(slotIntervalMinutes)]}
+            onValueChange={(values) => {
+              const next = values[0];
+              if (next) setSlotIntervalMinutes(Number(next));
+            }}
+          >
+            {[15, 30, 60].map((min) => (
+              <ToggleGroupItem
+                key={min}
+                value={String(min)}
+                className="h-12.5 flex-1 rounded-[10px]! border border-ink text-[24px]"
+              >
+                {min} min
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <p className="mt-2 text-center text-[14px] text-[#777777]">
+            Shorter intervals create more time slots for people to fill in.
+          </p>
+        </>
       )}
 
       <Button
         type="button"
         onClick={handleNext}
         disabled={isPending}
-        className={`mx-auto mt-6 block h-[50px] w-[129px] rounded-[10px] border text-[24px] leading-none tracking-tighter ${
+        className={`mx-auto mt-6 block h-12.5 w-32.25 rounded-[10px] border text-[24px] leading-none tracking-tighter ${
           hasSelection
             ? 'border-brand bg-brand text-white hover:bg-brand'
             : 'border-ink bg-transparent text-ink hover:bg-transparent'

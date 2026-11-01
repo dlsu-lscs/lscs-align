@@ -40,6 +40,8 @@ GRANT CONNECT ON DATABASE :"database_name" TO :"migration_user", :"runtime_user"
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 CREATE SCHEMA align AUTHORIZATION :"migration_user";
 GRANT USAGE ON SCHEMA align TO :"runtime_user";
+-- Keep default table privileges read-only so metadata tables (e.g. align.schema_migrations) stay immutable;
+-- migrations grant table-specific INSERT, UPDATE, DELETE via align.runtime_role.
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migration_user" IN SCHEMA align GRANT SELECT ON TABLES TO :"runtime_user";
 ALTER DATABASE :"database_name" SET align.environment = :'app_environment';
 ALTER DATABASE :"database_name" SET align.runtime_role = :'runtime_user';
