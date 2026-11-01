@@ -4,6 +4,7 @@ import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getEvent, EventNotFoundError } from '@/lib/api/events';
 import { formatMinutes } from '@/lib/time';
+import Link from 'next/link';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -24,14 +25,35 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
 
   if (isPending) {
     return (
-      <main className="p-4">
-        <div className="h-8 w-64 animate-pulse rounded bg-gray-200" />
+      <main className="flex min-h-[70vh] flex-col items-center justify-center gap-6 p-4 text-center">
+        <p className="text-[24px] text-brand leading-none tracking-tighter">
+          Fetching event information...
+        </p>
+        <div
+          role="status"
+          aria-label="Loading"
+          className="size-[175px] animate-spin rounded-full border-[10px] border-[#D9D9D9] border-t-brand"
+        />
       </main>
     );
   }
 
   if (error instanceof EventNotFoundError) {
-    return <main className="p-4 text-center">Event not found</main>;
+    return (
+      <main className="flex min-h-[70vh] flex-col items-center justify-center gap-6 p-4 text-center text-brand">
+        <div className="text-[24px] leading-none tracking-tighter">
+          <p>This event seems to have been deleted by the organizer, or has expired.</p>
+          <p>Create an event instead?</p>
+        </div>
+        <Link
+          href="/"
+          className="flex h-[50px] w-[140px] shrink-0 items-center justify-center rounded-[10px] bg-brand text-[24px] leading-none 
+              tracking-tighter text-white hover:bg-brand-hover"
+        >
+          Create Event
+        </Link>
+      </main>
+    );
   }
 
   if (error) {
