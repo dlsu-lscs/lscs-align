@@ -184,7 +184,8 @@ services:
     configs:
       - source: postgres-bootstrap
         target: /docker-entrypoint-initdb.d/001-bootstrap.sh
-        mode: 0555
+        # Decimal 365 is octal 0555; decimal avoids YAML parser ambiguity in Dokploy.
+        mode: 365
     networks:
       - backend
     healthcheck:

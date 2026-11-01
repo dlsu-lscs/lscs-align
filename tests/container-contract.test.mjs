@@ -43,6 +43,7 @@ test('Compose defines the four-service dependency chain and no database host por
   assert.match(compose, /PathPrefix\(`\/api`\)/);
   assert.match(compose, /stripprefix\.prefixes=\/api/);
   assert.match(compose, /^configs:\s*\n\s+postgres-bootstrap:\s*\n\s+file:/m);
+  assert.match(compose, /^\s+mode: 365$/m, 'bootstrap mode must be unambiguous decimal 0555');
   assert.doesNotMatch(compose, /\.\/docker\/postgres\/001-bootstrap\.sh:.*docker-entrypoint/);
 });
 
@@ -79,6 +80,13 @@ test('database bootstrap creates separate non-superuser roles safely', async () 
   assert.match(bootstrap, /NOCREATEROLE/);
   assert.match(bootstrap, /align\.environment/);
   assert.match(bootstrap, /REVOKE ALL ON DATABASE/);
+  for (const database of ['postgres', 'template0', 'template1']) {
+    assert.match(
+      bootstrap,
+      new RegExp(`REVOKE CONNECT ON DATABASE ${database} FROM PUBLIC`),
+      `${database} must not remain reachable through PUBLIC`,
+    );
+  }
   assert.match(bootstrap, /REVOKE CREATE ON SCHEMA public/);
   assert.match(bootstrap, /format\('CREATE ROLE %I LOGIN PASSWORD %L/);
   assert.match(bootstrap, /\*\[!a-z0-9_\]\*/);
