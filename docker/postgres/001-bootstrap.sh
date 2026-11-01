@@ -25,6 +25,9 @@ psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
   --set migration_password="$DATABASE_MIGRATION_PASSWORD" \
   --set runtime_user="$DATABASE_RUNTIME_USER" \
   --set runtime_password="$DATABASE_RUNTIME_PASSWORD" <<'SQL'
+REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+REVOKE CONNECT ON DATABASE template0 FROM PUBLIC;
+REVOKE CONNECT ON DATABASE template1 FROM PUBLIC;
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT', :'migration_user', :'migration_password') \gexec
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT', :'runtime_user', :'runtime_password') \gexec
 SELECT format('CREATE DATABASE %I OWNER %I', :'database_name', :'migration_user') \gexec
