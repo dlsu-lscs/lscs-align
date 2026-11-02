@@ -10,7 +10,7 @@ export type CreateEventPayload = {
   slot_interval_minutes: number;
 };
 
-export async function createEvent(payload: CreateEventPayload) {
+export async function createEvent(payload: CreateEventPayload): Promise<{ slug: string }> {
   const response = await fetch('/api/events', {
     method: 'POST',
     headers: {
@@ -23,10 +23,15 @@ export async function createEvent(payload: CreateEventPayload) {
     const body = (await response.json().catch(() => null)) as {
       error?: string;
       message?: string;
+      details?: { field: string; message: string }[];
     } | null;
-    throw new Error(body?.error ?? body?.message ?? `HTTP error! Status: ${response.status}`);
+    throw new Error(
+      body?.details?.[0]?.message ??
+        body?.message ??
+        body?.error ??
+        `HTTP error! Status: ${response.status}`,
+    );
   }
 
-  const data = await response.json();
-  return data;
+  return (await response.json()) as { slug: string };
 }
