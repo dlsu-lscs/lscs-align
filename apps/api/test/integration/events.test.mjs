@@ -216,3 +216,66 @@ test('the runtime role can update and delete event rows without DDL or migration
     (error) => error.code === '42501',
   );
 });
+
+test('a created event is given a public slug that is persisted', async () => {
+  const response = await post(payload());
+
+  assert.equal(response.statusCode, 201);
+  const slug = response.json().public_slug;
+  assert.match(slug, /^[A-Za-z0-9_-]{8,24}$/);
+
+  const stored = await runtimePool.query('SELECT public_slug FROM align.events');
+  assert.deepEqual(stored.rows, [{ public_slug: slug }]);
+});
+
+test('each event receives a distinct public slug', async () => {
+  for (let index = 0; index < 20; index += 1) {
+    assert.equal((await post(payload({ title: `Event ${index}` }))).statusCode, 201);
+  }
+
+  const counts = await runtimePool.query(
+    'SELECT count(*)::integer AS total, count(DISTINCT public_slug)::integer AS distinct_slugs FROM align.events',
+  );
+  assert.equal(counts.rows[0].total, 20);
+  assert.equal(counts.rows[0].distinct_slugs, 20);
+});
+
+test('a public slug resolves to its own event', async () => {
+  const first = (await post(payload({ title: 'First event' }))).json().public_slug;
+  const second = (await post(payload({ title: 'Second event' }))).json().public_slug;
+
+  const lookup = await app.inject({ method: 'GET', url: `/events/${first}` });
+  assert.equal(lookup.statusCode, 200);
+  assert.equal(lookup.json().title, 'First event');
+
+  const other = await app.inject({ method: 'GET', url: `/events/${second}` });
+  assert.equal(other.json().title, 'Second event');
+});
+
+test('the public lookup never exposes the internal event id', async () => {
+  const slug = (await post(payload())).json().public_slug;
+  const body = (await app.inject({ method: 'GET', url: `/events/${slug}` })).json();
+
+  assert.equal(body.id, undefined);
+  assert.doesNotMatch(JSON.stringify(body), /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/);
+});
+
+test('unknown and malformed slugs are both reported as not found', async () => {
+  for (const slug of ['Zzzz99999', 'abc', encodeURIComponent('abc/def')]) {
+    const response = await app.inject({ method: 'GET', url: `/events/${slug}` });
+    assert.equal(response.statusCode, 404, slug);
+    assert.deepEqual(response.json(), { error: 'event_not_found' });
+  }
+});
+
+test('the runtime role can read the public slug but cannot drop its unique index', async () => {
+  assert.equal((await post(payload())).statusCode, 201);
+
+  const read = await runtimePool.query('SELECT public_slug FROM align.events');
+  assert.equal(read.rows.length, 1);
+
+  await assert.rejects(
+    runtimePool.query('DROP INDEX align.events_public_slug_key'),
+    (error) => error.code === '42501',
+  );
+});
