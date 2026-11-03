@@ -24,6 +24,7 @@ export const events = alignSchema.table(
   'events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    publicSlug: text('public_slug').notNull(),
     title: text('title').notNull(),
     description: text('description'),
     scheduleType: scheduleTypeEnum('schedule_type').notNull(),
@@ -34,8 +35,10 @@ export const events = alignSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex('events_public_slug_key').on(table.publicSlug),
     check('events_title_length', sql`char_length(${table.title}) between 1 and 200`),
     check('events_slot_interval_supported', sql`${table.slotIntervalMinutes} in (15, 30, 60)`),
+    check('events_public_slug_format', sql`${table.publicSlug} ~ '^[A-Za-z0-9_-]{8,24}$'`),
   ],
 );
 
