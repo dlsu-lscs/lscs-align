@@ -1,0 +1,24 @@
+name: Environment Protection Probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected environment to verify
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions: {}
+
+jobs:
+  approval-probe:
+    name: Verify Environment Approval
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ inputs.environment }}
+    steps:
+      - name: Record the approved protection gate
+        run: echo "Environment protection released this permissionless probe."

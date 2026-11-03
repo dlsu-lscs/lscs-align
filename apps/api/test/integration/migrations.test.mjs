@@ -63,12 +63,20 @@ test('fresh and repeated migrations are deterministic', async () => {
     'SELECT version, name FROM align.schema_migrations ORDER BY version',
   );
 
-  assert.deepEqual(first, { applied: ['0001', '0002', '0003'], skipped: [] });
-  assert.deepEqual(second, { applied: [], skipped: ['0001', '0002', '0003'] });
+  assert.deepEqual(first, {
+    applied: ['0001', '0002', '0003', '0004', '0005'],
+    skipped: [],
+  });
+  assert.deepEqual(second, {
+    applied: [],
+    skipped: ['0001', '0002', '0003', '0004', '0005'],
+  });
   assert.deepEqual(history.rows, [
     { version: '0001', name: 'platform_baseline' },
     { version: '0002', name: 'core_scheduling' },
     { version: '0003', name: 'event_runtime_permissions' },
+    { version: '0004', name: 'participant_availability' },
+    { version: '0005', name: 'participant_runtime_permissions' },
   ]);
 });
 
@@ -98,20 +106,25 @@ test('an existing previous schema upgrades without losing its records', async ()
     'SELECT version FROM align.schema_migrations ORDER BY version',
   );
 
-  assert.deepEqual(result, { applied: ['0001', '0002', '0003'], skipped: [] });
+  assert.deepEqual(result, {
+    applied: ['0001', '0002', '0003', '0004', '0005'],
+    skipped: [],
+  });
   assert.deepEqual(legacy.rows, [{ id: 1, label: 'preserve-me' }]);
   assert.deepEqual(history.rows, [
     { version: '0000' },
     { version: '0001' },
     { version: '0002' },
     { version: '0003' },
+    { version: '0004' },
+    { version: '0005' },
   ]);
 });
 
 test('readiness verifies database identity and reports the latest migration', async () => {
   const readiness = createReadinessProbe(migrationPool, expectedIdentity);
 
-  assert.deepEqual(await readiness(), { schemaVersion: '0003' });
+  assert.deepEqual(await readiness(), { schemaVersion: '0005' });
 });
 
 test('a failing migration rolls back its schema changes and history record', async (t) => {
@@ -187,7 +200,13 @@ test('the runtime role can read but cannot alter the application schema', async 
   const result = await runtimePool.query(
     'SELECT version FROM align.schema_migrations ORDER BY version',
   );
-  assert.deepEqual(result.rows, [{ version: '0001' }, { version: '0002' }, { version: '0003' }]);
+  assert.deepEqual(result.rows, [
+    { version: '0001' },
+    { version: '0002' },
+    { version: '0003' },
+    { version: '0004' },
+    { version: '0005' },
+  ]);
   await assert.rejects(
     runtimePool.query('CREATE TABLE align.runtime_must_not_create(id integer)'),
     (error) => error.code === '42501',
