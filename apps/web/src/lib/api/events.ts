@@ -38,7 +38,8 @@ export async function createEvent(payload: CreateEventPayload) {
 }
 
 export type EventDetails = {
-  slug: string;
+  id: string;
+  public_slug: string;
   title: string;
   description: string | null;
   organizer: { name: string } | null;
@@ -54,7 +55,7 @@ export type EventDetails = {
 export class EventNotFoundError extends Error {}
 
 export async function getEvent(slug: string): Promise<EventDetails> {
-  const response = await fetch(`/api/events/${slug}/details`);
+  const response = await fetch(`/api/events/${encodeURIComponent(slug)}`);
 
   if (response.status === 404) throw new EventNotFoundError();
   if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
