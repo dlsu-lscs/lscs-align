@@ -45,6 +45,8 @@ test('discoverMigrations returns ordered migrations with stable SHA-256 checksum
       { version: '0001', name: 'platform_baseline' },
       { version: '0002', name: 'core_scheduling' },
       { version: '0003', name: 'event_runtime_permissions' },
+      { version: '0004', name: 'participant_availability' },
+      { version: '0005', name: 'participant_runtime_permissions' },
     ],
   );
   assert.match(migrations[0].checksum, /^[0-9a-f]{64}$/);
@@ -53,6 +55,10 @@ test('discoverMigrations returns ordered migrations with stable SHA-256 checksum
   assert.match(migrations[1].sql, /align\.events/);
   assert.match(migrations[2].checksum, /^[0-9a-f]{64}$/);
   assert.match(migrations[2].sql, /align\.runtime_role/);
+  assert.match(migrations[3].checksum, /^[0-9a-f]{64}$/);
+  assert.match(migrations[3].sql, /CREATE TABLE align\.participants/);
+  assert.match(migrations[4].checksum, /^[0-9a-f]{64}$/);
+  assert.match(migrations[4].sql, /GRANT USAGE ON TYPE/);
 });
 
 test('discoverMigrations rejects duplicate versions before touching a database', async (t) => {

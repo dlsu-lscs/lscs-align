@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 
 import type { Database } from '@align/db';
 
+import { registerAvailabilityRoutes } from './routes/availability.ts';
 import { registerEventRoutes } from './routes/events.ts';
 import { registerHealthRoute } from './routes/health.ts';
 
@@ -20,6 +21,7 @@ export function createApp(options: AppOptions = {}) {
   app.register(cors, { origin: origins });
   app.register(registerHealthRoute);
   app.register(registerEventRoutes(options.database));
+  app.register(registerAvailabilityRoutes(options.database));
 
   app.setErrorHandler((_error, _request, reply) => {
     reply.status(500).send({ error: 'Internal Server Error' });
