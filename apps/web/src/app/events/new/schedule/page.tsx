@@ -81,7 +81,8 @@ export default function SchedulePage() {
       {
         onSuccess: (data) => {
           resetForm();
-          router.push(data.slug ? `/events/${data.slug}/share` : '/');
+          const publicSlug = data.public_slug ?? data.slug;
+          router.push(publicSlug ? `/events/${publicSlug}/share` : '/');
         },
       },
     );
