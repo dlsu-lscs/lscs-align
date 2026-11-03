@@ -10,7 +10,9 @@ export type CreateEventPayload = {
   slot_interval_minutes: number;
 };
 
-export async function createEvent(payload: CreateEventPayload): Promise<{ slug: string }> {
+export async function createEvent(
+  payload: CreateEventPayload,
+): Promise<{ public_slug?: string; slug?: string }> {
   const response = await fetch('/api/events', {
     method: 'POST',
     headers: {
@@ -27,11 +29,37 @@ export async function createEvent(payload: CreateEventPayload): Promise<{ slug: 
     } | null;
     throw new Error(
       body?.details?.[0]?.message ??
-        body?.message ??
         body?.error ??
+        body?.message ??
         `HTTP error! Status: ${response.status}`,
     );
   }
 
-  return (await response.json()) as { slug: string };
+  return (await response.json()) as { public_slug?: string; slug?: string };
+}
+
+export type EventDetails = {
+  id: string;
+  public_slug: string;
+  title: string;
+  description: string | null;
+  organizer: { name: string } | null;
+  schedule_type: 'dates_only' | 'dates_and_times' | 'days_of_week';
+  dates: string[];
+  weekdays: number[];
+  daily_start_minute: number | null;
+  daily_end_minute: number | null;
+  time_zone: string;
+  slot_interval_minutes: number;
+};
+
+export class EventNotFoundError extends Error {}
+
+export async function getEvent(slug: string): Promise<EventDetails> {
+  const response = await fetch(`/api/events/${encodeURIComponent(slug)}`);
+
+  if (response.status === 404) throw new EventNotFoundError();
+  if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+
+  return (await response.json()) as EventDetails;
 }
