@@ -229,3 +229,74 @@ test('POST /events rejects an invalid payload before touching the database', asy
   assert.ok(body.details.some((detail) => detail.field === 'title'));
   assert.ok(body.details.some((detail) => detail.field === 'slot_interval_minutes'));
 });
+
+test('the organizer name is optional, trimmed, and capped', async () => {
+  const { createEventSchema } = await loadEventsModule();
+
+  const trimmed = createEventSchema.safeParse(
+    datesOnlyPayload({ organizer_name: '  Ejay Santos  ' }),
+  );
+  assert.equal(trimmed.success, true);
+  assert.equal(trimmed.data.organizer_name, 'Ejay Santos');
+
+  assert.equal(
+    createEventSchema.safeParse(datesOnlyPayload({ organizer_name: undefined })).success,
+    true,
+  );
+  assert.equal(
+    createEventSchema.safeParse(datesOnlyPayload({ organizer_name: '   ' })).success,
+    false,
+  );
+  assert.equal(
+    createEventSchema.safeParse(datesOnlyPayload({ organizer_name: 'z'.repeat(200) })).success,
+    true,
+  );
+  assert.equal(
+    createEventSchema.safeParse(datesOnlyPayload({ organizer_name: 'z'.repeat(201) })).success,
+    false,
+  );
+});
+
+test('the time zone is optional and capped at the database limit', async () => {
+  const { createEventSchema } = await loadEventsModule();
+
+  assert.equal(
+    createEventSchema.safeParse(datesOnlyPayload({ time_zone: undefined })).success,
+    true,
+  );
+  assert.equal(createEventSchema.safeParse(datesOnlyPayload({ time_zone: '' })).success, false);
+  assert.equal(
+    createEventSchema.safeParse(datesOnlyPayload({ time_zone: 'z'.repeat(64) })).success,
+    true,
+  );
+  assert.equal(
+    createEventSchema.safeParse(datesOnlyPayload({ time_zone: 'z'.repeat(65) })).success,
+    false,
+  );
+});
+
+test('GET /events/:slug/details reports a safe error when no database is configured', async (t) => {
+  const { createApp } = await import('../src/app.ts');
+  const app = createApp();
+  await app.ready();
+  t.after(() => app.close());
+
+  const response = await app.inject({ method: 'GET', url: '/events/Abcd12345/details' });
+
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(response.json(), { error: 'database_unavailable' });
+});
+
+test('GET /events/:slug/details rejects a malformed slug before reaching the database', async (t) => {
+  const { createApp } = await import('../src/app.ts');
+  const app = createApp();
+  await app.ready();
+  t.after(() => app.close());
+
+  for (const slug of ['abc', 'z'.repeat(25), encodeURIComponent('has space')]) {
+    const response = await app.inject({ method: 'GET', url: `/events/${slug}/details` });
+
+    assert.equal(response.statusCode, 404, slug);
+    assert.deepEqual(response.json(), { error: 'event_not_found' });
+  }
+});

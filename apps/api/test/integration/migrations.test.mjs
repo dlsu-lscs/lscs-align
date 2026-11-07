@@ -64,12 +64,12 @@ test('fresh and repeated migrations are deterministic', async () => {
   );
 
   assert.deepEqual(first, {
-    applied: ['0001', '0002', '0003', '0004', '0005', '0006'],
+    applied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007'],
     skipped: [],
   });
   assert.deepEqual(second, {
     applied: [],
-    skipped: ['0001', '0002', '0003', '0004', '0005', '0006'],
+    skipped: ['0001', '0002', '0003', '0004', '0005', '0006', '0007'],
   });
   assert.deepEqual(history.rows, [
     { version: '0001', name: 'platform_baseline' },
@@ -78,6 +78,7 @@ test('fresh and repeated migrations are deterministic', async () => {
     { version: '0004', name: 'participant_availability' },
     { version: '0005', name: 'participant_runtime_permissions' },
     { version: '0006', name: 'event_public_slug' },
+    { version: '0007', name: 'event_public_details' },
   ]);
 });
 
@@ -108,7 +109,7 @@ test('an existing previous schema upgrades without losing its records', async ()
   );
 
   assert.deepEqual(result, {
-    applied: ['0001', '0002', '0003', '0004', '0005', '0006'],
+    applied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007'],
     skipped: [],
   });
   assert.deepEqual(legacy.rows, [{ id: 1, label: 'preserve-me' }]);
@@ -120,13 +121,14 @@ test('an existing previous schema upgrades without losing its records', async ()
     { version: '0004' },
     { version: '0005' },
     { version: '0006' },
+    { version: '0007' },
   ]);
 });
 
 test('readiness verifies database identity and reports the latest migration', async () => {
   const readiness = createReadinessProbe(migrationPool, expectedIdentity);
 
-  assert.deepEqual(await readiness(), { schemaVersion: '0006' });
+  assert.deepEqual(await readiness(), { schemaVersion: '0007' });
 });
 
 test('a failing migration rolls back its schema changes and history record', async (t) => {
@@ -209,6 +211,7 @@ test('the runtime role can read but cannot alter the application schema', async 
     { version: '0004' },
     { version: '0005' },
     { version: '0006' },
+    { version: '0007' },
   ]);
   await assert.rejects(
     runtimePool.query('CREATE TABLE align.runtime_must_not_create(id integer)'),
