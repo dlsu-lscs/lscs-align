@@ -31,6 +31,8 @@ export const events = alignSchema.table(
     slotIntervalMinutes: smallint('slot_interval_minutes').notNull().default(30),
     dailyStartMinute: smallint('daily_start_minute'),
     dailyEndMinute: smallint('daily_end_minute'),
+    organizerName: text('organizer_name'),
+    timeZone: text('time_zone').notNull().default('Asia/Manila'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -39,6 +41,11 @@ export const events = alignSchema.table(
     check('events_title_length', sql`char_length(${table.title}) between 1 and 200`),
     check('events_slot_interval_supported', sql`${table.slotIntervalMinutes} in (15, 30, 60)`),
     check('events_public_slug_format', sql`${table.publicSlug} ~ '^[A-Za-z0-9_-]{8,24}$'`),
+    check(
+      'events_organizer_name_length',
+      sql`${table.organizerName} is null or char_length(${table.organizerName}) between 1 and 200`,
+    ),
+    check('events_time_zone_length', sql`char_length(${table.timeZone}) between 1 and 64`),
   ],
 );
 
