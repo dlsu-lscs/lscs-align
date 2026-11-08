@@ -61,9 +61,10 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
   }
 
   const gridAvail = {
+    id: data.id,
     schedule_type: data.schedule_type,
-    dates: data.dates,
-    weekdays: data.weekdays,
+    dates: data.dates ?? [],
+    weekdays: data.weekdays ?? [],
     start_minute: data.daily_start_minute,
     end_minute: data.daily_end_minute,
     slot_interval_minutes: data.slot_interval_minutes,
@@ -78,9 +79,9 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
       <p>{SCHEDULE_LABELS[data.schedule_type]}</p>
 
       {data.schedule_type === 'days_of_week' ? (
-        <p>{data.weekdays.map((days) => WEEKDAYS[days]).join(', ')}</p>
+        <p>{(data.weekdays ?? []).map((days) => WEEKDAYS[days]).join(', ')}</p>
       ) : (
-        <p>{data.dates.join(', ')}</p>
+        <p>{(data.dates ?? []).join(', ')}</p>
       )}
 
       {data.daily_start_minute !== null && data.daily_end_minute !== null && (
