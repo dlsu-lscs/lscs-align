@@ -165,8 +165,7 @@ jobs:
       - name: Verify staging externally
         id: smoke
         env:
-          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
-          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+          STAGING_BASIC_AUTHORIZATION: ${{ secrets.STAGING_BASIC_AUTHORIZATION }}
         run: >-
           node scripts/deploy/smoke.mjs
           --manifest release-manifest.json

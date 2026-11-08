@@ -51,13 +51,11 @@ function approvedRequestOptions(options) {
     throw new TypeError('deployment origin is not approved for the selected environment');
   }
   const headers = { accept: 'application/json' };
-  const accessValues = [options.accessClientId, options.accessClientSecret];
-  if (accessValues.some(Boolean) && !accessValues.every(Boolean)) {
-    throw new TypeError('both Cloudflare Access service-token values are required');
-  }
-  if (options.accessClientId) {
-    headers['CF-Access-Client-Id'] = options.accessClientId;
-    headers['CF-Access-Client-Secret'] = options.accessClientSecret;
+  if (options.environment === 'staging') {
+    if (!/^Basic\s+\S+$/.test(options.basicAuthorization ?? '')) {
+      throw new TypeError('staging Basic Auth authorization is required');
+    }
+    headers.authorization = options.basicAuthorization;
   }
   return { approvedOrigin, headers, fetchImpl: options.fetchImpl ?? fetch };
 }
@@ -138,8 +136,7 @@ async function main() {
     baseUrl: values.origin,
     environment: values.environment,
     manifest,
-    accessClientId: process.env.CLOUDFLARE_ACCESS_CLIENT_ID,
-    accessClientSecret: process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET,
+    basicAuthorization: process.env.STAGING_BASIC_AUTHORIZATION,
   });
 }
 

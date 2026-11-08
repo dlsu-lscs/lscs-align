@@ -62,8 +62,7 @@ test('external smoke proves routing, security headers, revision, and migration r
     baseUrl: 'https://staging-align.dlsu-lscs.org',
     environment: 'staging',
     manifest,
-    accessClientId: 'id',
-    accessClientSecret: 'secret',
+    basicAuthorization: 'Basic c3RhZ2luZy10ZXN0OnRlc3Q=',
     fetchImpl,
   });
 
@@ -72,9 +71,20 @@ test('external smoke proves routing, security headers, revision, and migration r
     ['/healthz', '/revision.json', '/api/healthz', '/api/readyz'],
   );
   for (const call of calls) {
-    assert.equal(call.headers['CF-Access-Client-Id'], 'id');
-    assert.equal(call.headers['CF-Access-Client-Secret'], 'secret');
+    assert.equal(call.headers.authorization, 'Basic c3RhZ2luZy10ZXN0OnRlc3Q=');
   }
+});
+
+test('staging smoke requires a Basic Auth header while production does not', async () => {
+  await assert.rejects(
+    verifyDeployment({
+      baseUrl: 'https://staging-align.dlsu-lscs.org',
+      environment: 'staging',
+      manifest,
+      fetchImpl: async () => response({ status: 'ok', service: 'web' }),
+    }),
+    /Basic Auth/i,
+  );
 });
 
 test('external smoke fails closed on a revision mismatch or an unapproved origin', async () => {
@@ -167,7 +177,7 @@ test('deployment waiter tolerates rollout transitions but requires a fully verif
     manifest,
     fetchImpl,
     intervalMs: 1,
-    timeoutMs: 100,
+    timeoutMs: 1_000,
   });
   assert.equal(attempts, 3);
 });

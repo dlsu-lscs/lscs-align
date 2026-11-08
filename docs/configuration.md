@@ -18,6 +18,7 @@ Staging and production are configured independently. Values in one column must n
 | `APP_DOMAIN`                  | configuration           | `staging-align.dlsu-lscs.org`         | `align.dlsu-lscs.org`                       | Senior DevSecOps        |
 | `ROUTER_PREFIX`               | configuration           | `align-staging`                       | `align-production`                          | Senior DevSecOps        |
 | `TRAEFIK_NETWORK`             | configuration           | approved `lscsdev1` edge network      | approved `lscsprod1` edge network           | Infrastructure operator |
+| `STAGING_BASIC_AUTH_USERS`    | secret                  | one bcrypt `user:hash` entry          | not set                                     | Senior DevSecOps        |
 | `GOOGLE_OAUTH_CLIENT_ID`      | sensitive configuration | staging-only OAuth client             | production-only OAuth client                | Backend Tech Lead       |
 | `GOOGLE_OAUTH_CLIENT_SECRET`  | secret                  | staging-only secret                   | production-only secret                      | Backend Tech Lead       |
 | `GOOGLE_OAUTH_REDIRECT_URI`   | configuration           | staging callback origin               | production callback origin                  | Backend Tech Lead       |
@@ -28,7 +29,7 @@ The release renderer pins `APP_ENV`, `SOURCE_COMMIT`, `EXPECTED_DATABASE_NAME`, 
 
 ## GitHub protected-environment values
 
-Each GitHub environment has its own `DOKPLOY_URL` and `DOKPLOY_COMPOSE_ID` variables and its own narrowly scoped `DOKPLOY_API_KEY` and `DISCORD_WEBHOOK_URL` secrets. Staging additionally has a Cloudflare Access service token in `CLOUDFLARE_ACCESS_CLIENT_ID` and `CLOUDFLARE_ACCESS_CLIENT_SECRET`. Production defines `DOKPLOY_BACKUP_ID`, `DOKPLOY_BACKUP_DESTINATION_ID`, and `DOKPLOY_BACKUP_SEARCH` variables. A Dokploy key may update and deploy only the matching Compose project; it must not administer hosts, users, or the other environment.
+Each GitHub environment has its own `DOKPLOY_URL` and `DOKPLOY_COMPOSE_ID` variables and its own narrowly scoped `DOKPLOY_API_KEY` and `DISCORD_WEBHOOK_URL` secrets. Staging additionally has `STAGING_BASIC_AUTHORIZATION`, the complete `Basic <base64(username:password)>` header for the smoke check. Dokploy alone stores `STAGING_BASIC_AUTH_USERS`, the bcrypt `user:hash` value consumed by Traefik. Production defines `DOKPLOY_BACKUP_ID`, `DOKPLOY_BACKUP_DESTINATION_ID`, and `DOKPLOY_BACKUP_SEARCH` variables. A Dokploy key may update and deploy only the matching Compose project; it must not administer hosts, users, or the other environment.
 
 Pull-request workflows reference no secrets. GitHub must not store database, OAuth, session, PostgreSQL administration, or telemetry ingestion credentials.
 

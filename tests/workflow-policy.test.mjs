@@ -167,7 +167,8 @@ test('trusted release deploys staging then promotes the same manifest to protect
     productionCommands.indexOf('backup.mjs') < productionCommands.indexOf('dokploy.mjs'),
     true,
   );
-  assert.match(source, /CLOUDFLARE_ACCESS_CLIENT_ID/);
+  assert.match(source, /STAGING_BASIC_AUTHORIZATION/);
+  assert.doesNotMatch(source, /CLOUDFLARE_ACCESS_CLIENT_ID/);
   assert.match(source, /DOKPLOY_API_KEY/);
   assert.match(source, /DISCORD_WEBHOOK_URL/);
 });

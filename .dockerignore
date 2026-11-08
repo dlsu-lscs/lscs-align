@@ -7,6 +7,9 @@ node_modules
 **/node_modules
 dist
 **/dist
+**/*.tsbuildinfo
+.next
+**/.next
 coverage
 .nyc_output
 *.log
