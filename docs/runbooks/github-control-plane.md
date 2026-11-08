@@ -67,7 +67,7 @@ The verified branch-protection API output must show administrator enforcement, r
 
 Issue #16 remains open until the hosted environments exist and these external checks pass:
 
-1. `https://staging-align.dlsu-lscs.org` is behind deny-by-default Cloudflare Access.
+1. `https://staging-align.dlsu-lscs.org` returns HTTP 401 without credentials and succeeds only with the approved staging Basic Auth account.
 2. `https://align.dlsu-lscs.org` is the approved public production origin.
 3. Both origins use valid TLS with Cloudflare Full Strict mode.
 4. Direct-origin requests and public database/service ports fail.
@@ -82,7 +82,7 @@ Attach only non-sensitive evidence:
 - current `dev` and `main` protection API URLs;
 - the failed-check pull request;
 - rejected and approved production probe workflow runs;
-- Cloudflare Access, TLS, origin-isolation, and CORS verification results;
+- staging Basic Auth, TLS, origin-isolation, and CORS verification results;
 - operator and UTC timestamps.
 
 Close issue #16 only after every acceptance criterion has a corresponding evidence link or redacted command result.
