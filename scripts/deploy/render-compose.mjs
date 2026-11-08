@@ -21,6 +21,24 @@ function requiredService(document, name) {
   return service;
 }
 
+function addStagingBasicAuth(service, routerName) {
+  if (!Array.isArray(service.labels)) {
+    throw new TypeError(`Compose service ${routerName} must declare Traefik labels`);
+  }
+  const middlewareLabel = `traefik.http.routers.\${ROUTER_PREFIX}-${routerName}.middlewares=`;
+  const index = service.labels.findIndex((label) => label.startsWith(middlewareLabel));
+  if (index === -1) {
+    throw new TypeError(`Compose service ${routerName} must declare router middlewares`);
+  }
+  const authName = `\${ROUTER_PREFIX}-${routerName}-staging-auth`;
+  service.labels[index] =
+    `${service.labels[index].slice(0, middlewareLabel.length)}${authName},${service.labels[index].slice(middlewareLabel.length)}`;
+  service.labels.push(
+    `traefik.http.middlewares.${authName}.basicauth.users=\${STAGING_BASIC_AUTH_USERS:?STAGING_BASIC_AUTH_USERS is required}`,
+    `traefik.http.middlewares.${authName}.basicauth.removeheader=true`,
+  );
+}
+
 export function renderReleaseCompose(source, inputManifest, targetName, bootstrapScript) {
   const target = targets[targetName];
   if (!target) {
@@ -45,6 +63,11 @@ export function renderReleaseCompose(source, inputManifest, targetName, bootstra
   api.environment.EXPECTED_DATABASE_NAME = target.databaseName;
   api.environment.OTEL_SERVICE_NAME = target.telemetryServiceName;
   migrate.environment.EXPECTED_DATABASE_NAME = target.databaseName;
+
+  if (targetName === 'staging') {
+    addStagingBasicAuth(web, 'web');
+    addStagingBasicAuth(api, 'api');
+  }
 
   if (bootstrapScript !== undefined) {
     if (!bootstrapScript.trim()) throw new TypeError('database bootstrap script is empty');

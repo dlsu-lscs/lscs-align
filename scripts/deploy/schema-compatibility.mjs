@@ -24,8 +24,7 @@ async function main() {
     baseUrl: values.origin,
     environment: values.environment,
     manifest,
-    accessClientId: process.env.CLOUDFLARE_ACCESS_CLIENT_ID,
-    accessClientSecret: process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET,
+    basicAuthorization: process.env.STAGING_BASIC_AUTHORIZATION,
   });
 }
 

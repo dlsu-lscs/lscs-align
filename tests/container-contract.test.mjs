@@ -15,14 +15,17 @@ for (const [service, port] of [
 
     assert.match(dockerfile, /^FROM node:24[^\s]*@sha256:[0-9a-f]{64} AS /m);
     assert.match(dockerfile, / AS build/m);
-    assert.match(
-      dockerfile,
-      /^FROM gcr\.io\/distroless\/nodejs24-debian13:nonroot@sha256:[0-9a-f]{64} AS runtime$/m,
-    );
+    assert.match(dockerfile, /^FROM node:24-alpine@sha256:[0-9a-f]{64} AS runtime$/m);
+    assert.match(dockerfile, /RUN rm -rf[\s\S]*\/usr\/local\/lib\/node_modules\/npm/);
+    assert.match(dockerfile, /\/usr\/local\/lib\/node_modules\/corepack/);
+    assert.match(dockerfile, /\/opt\/yarn-v\*/);
+    assert.match(dockerfile, /addgroup -g 65532 -S nonroot/);
+    assert.match(dockerfile, /adduser -u 65532 -S -D -H -G nonroot nonroot/);
     assert.match(dockerfile, /^USER nonroot$/m);
     assert.match(dockerfile, new RegExp(`^EXPOSE ${port}$`, 'm'));
     assert.match(dockerfile, /^HEALTHCHECK /m);
-    assert.match(dockerfile, /\/nodejs\/bin\/node/);
+    assert.match(dockerfile, /^ENTRYPOINT \["\/usr\/local\/bin\/node"\]$/m);
+    assert.match(dockerfile, /\/usr\/local\/bin\/node/);
     assert.match(dockerfile, new RegExp(`127\\.0\\.0\\.1:${port}/healthz`));
     assert.match(dockerfile, /org\.opencontainers\.image\.revision/);
     assert.doesNotMatch(dockerfile, /npm install(?!\s+--)/);
@@ -100,5 +103,7 @@ test('.dockerignore excludes local secrets, dependencies, and build products', a
   for (const entry of ['.env', 'node_modules', 'dist', '.git', 'coverage']) {
     assert.match(dockerignore, new RegExp(`^${entry.replace('.', '\\.')}.*$`, 'm'));
   }
+  assert.match(dockerignore, /^\*\*\/\*\.tsbuildinfo$/m);
+  assert.match(dockerignore, /^\*\*\/\.next$/m);
   assert.match(dockerignore, /^!\.env\.example$/m);
 });
