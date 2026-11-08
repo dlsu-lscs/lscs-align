@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { eventDates, events, type Database } from '@align/db';
 
+import { generateSlug, isValidSlug } from '../lib/slug.ts';
+
+const MAX_SLUG_ATTEMPTS = 5;
 const MINUTES_IN_DAY = 1440;
 const SUPPORTED_INTERVALS = [15, 30, 60];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -92,7 +96,22 @@ export const createEventSchema = z
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 
-export function registerEventRoutes(database?: Database) {
+function isSlugConflict(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (typeof current !== 'object' || current === null) {
+      return false;
+    }
+    const record = current as Record<string, unknown>;
+    if (record['code'] === '23505' && record['constraint'] === 'events_public_slug_key') {
+      return true;
+    }
+    current = record['cause'];
+  }
+  return false;
+}
+
+export function registerEventRoutes(database?: Database, createSlug: () => string = generateSlug) {
   return async function register(app: FastifyInstance): Promise<void> {
     app.post('/events', async (request, reply) => {
       const parsed = createEventSchema.safeParse(request.body);
@@ -114,37 +133,53 @@ export function registerEventRoutes(database?: Database) {
       const payload = parsed.data;
       const usesWeekdays = payload.schedule_type === 'days_of_week';
 
-      const created = await database.transaction(async (tx) => {
-        const inserted = await tx
-          .insert(events)
-          .values({
-            title: payload.title,
-            description: payload.description ? payload.description : null,
-            scheduleType: payload.schedule_type,
-            slotIntervalMinutes: payload.slot_interval_minutes,
-            dailyStartMinute: payload.daily_start_minute ?? null,
-            dailyEndMinute: payload.daily_end_minute ?? null,
-          })
-          .returning();
+      const db = database;
+      const insertEvent = async () =>
+        db.transaction(async (tx) => {
+          const inserted = await tx
+            .insert(events)
+            .values({
+              publicSlug: createSlug(),
+              title: payload.title,
+              description: payload.description ? payload.description : null,
+              scheduleType: payload.schedule_type,
+              slotIntervalMinutes: payload.slot_interval_minutes,
+              dailyStartMinute: payload.daily_start_minute ?? null,
+              dailyEndMinute: payload.daily_end_minute ?? null,
+            })
+            .returning();
 
-        const event = inserted[0];
-        if (!event) {
-          throw new Error('event insert returned no row');
+          const event = inserted[0];
+          if (!event) {
+            throw new Error('event insert returned no row');
+          }
+
+          const children = usesWeekdays
+            ? (payload.weekdays ?? []).map((weekday) => ({ eventId: event.id, weekday }))
+            : (payload.dates ?? []).map((calendarDate) => ({ eventId: event.id, calendarDate }));
+
+          if (children.length > 0) {
+            await tx.insert(eventDates).values(children);
+          }
+
+          return event;
+        });
+
+      let created;
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          created = await insertEvent();
+          break;
+        } catch (error) {
+          if (attempt >= MAX_SLUG_ATTEMPTS || !isSlugConflict(error)) {
+            throw error;
+          }
         }
-
-        const children = usesWeekdays
-          ? (payload.weekdays ?? []).map((weekday) => ({ eventId: event.id, weekday }))
-          : (payload.dates ?? []).map((calendarDate) => ({ eventId: event.id, calendarDate }));
-
-        if (children.length > 0) {
-          await tx.insert(eventDates).values(children);
-        }
-
-        return event;
-      });
+      }
 
       return reply.status(201).send({
         id: created.id,
+        public_slug: created.publicSlug,
         title: created.title,
         description: created.description,
         schedule_type: created.scheduleType,
@@ -154,6 +189,49 @@ export function registerEventRoutes(database?: Database) {
         dates: usesWeekdays ? [] : (payload.dates ?? []),
         weekdays: usesWeekdays ? (payload.weekdays ?? []) : [],
         created_at: created.createdAt.toISOString(),
+      });
+    });
+
+    app.get('/events/:slug', async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+
+      if (!isValidSlug(slug)) {
+        return reply.status(404).send({ error: 'event_not_found' });
+      }
+
+      if (!database) {
+        return reply.status(503).send({ error: 'database_unavailable' });
+      }
+
+      const found = await database
+        .select({
+          publicSlug: events.publicSlug,
+          title: events.title,
+          description: events.description,
+          scheduleType: events.scheduleType,
+          slotIntervalMinutes: events.slotIntervalMinutes,
+          dailyStartMinute: events.dailyStartMinute,
+          dailyEndMinute: events.dailyEndMinute,
+          createdAt: events.createdAt,
+        })
+        .from(events)
+        .where(eq(events.publicSlug, slug))
+        .limit(1);
+
+      const event = found[0];
+      if (!event) {
+        return reply.status(404).send({ error: 'event_not_found' });
+      }
+
+      return reply.status(200).send({
+        public_slug: event.publicSlug,
+        title: event.title,
+        description: event.description,
+        schedule_type: event.scheduleType,
+        slot_interval_minutes: event.slotIntervalMinutes,
+        daily_start_minute: event.dailyStartMinute,
+        daily_end_minute: event.dailyEndMinute,
+        created_at: event.createdAt.toISOString(),
       });
     });
   };
