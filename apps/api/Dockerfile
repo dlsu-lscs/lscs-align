@@ -14,15 +14,30 @@ COPY packages packages
 COPY apps/api apps/api
 RUN npm run build --workspace=@align/shared
 RUN npm run build --workspace=@align/db
+RUN test -f packages/shared/dist/index.js && \
+    test -f packages/shared/dist/index.d.ts && \
+    test -f packages/db/dist/index.js && \
+    test -f packages/db/dist/index.d.ts
 RUN npm run build --workspace=@align/api
 
 FROM dependencies AS production-dependencies
 RUN npm prune --omit=dev
 
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e AS runtime
+FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS runtime
 ARG SOURCE_COMMIT=0000000000000000000000000000000000000000
 LABEL org.opencontainers.image.source="https://github.com/dlsu-lscs/lscs-align" \
       org.opencontainers.image.revision="${SOURCE_COMMIT}"
+RUN rm -rf \
+      /usr/local/lib/node_modules/npm \
+      /usr/local/lib/node_modules/corepack \
+      /opt/yarn-v* \
+      /usr/local/bin/npm \
+      /usr/local/bin/npx \
+      /usr/local/bin/corepack \
+      /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg && \
+    addgroup -g 65532 -S nonroot && \
+    adduser -u 65532 -S -D -H -G nonroot nonroot
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=production-dependencies --chown=65532:65532 /workspace/node_modules ./node_modules
@@ -35,5 +50,6 @@ USER nonroot
 EXPOSE 4000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD ["/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:4000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+  CMD ["/usr/local/bin/node", "-e", "fetch('http://127.0.0.1:4000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+ENTRYPOINT ["/usr/local/bin/node"]
 CMD ["dist/index.js"]

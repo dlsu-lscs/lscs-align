@@ -23,6 +23,8 @@ services:
     environment:
       APP_ENV: \${APP_ENV:?required}
       SOURCE_COMMIT: \${SOURCE_COMMIT:?required}
+    labels:
+      - 'traefik.http.routers.\${ROUTER_PREFIX}-web.middlewares=\${ROUTER_PREFIX}-compress'
   api:
     image: \${API_IMAGE:?required}
     environment:
@@ -30,6 +32,8 @@ services:
       SOURCE_COMMIT: \${SOURCE_COMMIT:?required}
       EXPECTED_DATABASE_NAME: \${DATABASE_NAME:?required}
       DATABASE_NAME: \${DATABASE_NAME:?required}
+    labels:
+      - 'traefik.http.routers.\${ROUTER_PREFIX}-api.middlewares=\${ROUTER_PREFIX}-api-strip,\${ROUTER_PREFIX}-compress'
   migrate:
     image: \${API_IMAGE:?required}
     environment:
@@ -65,6 +69,30 @@ test('release Compose pins production identity independently of Dokploy variable
   assert.equal(rendered.services.api.environment.EXPECTED_DATABASE_NAME, 'align_production');
   assert.equal(rendered.services.api.environment.OTEL_SERVICE_NAME, 'align-api-production');
   assert.equal(rendered.services.migrate.environment.EXPECTED_DATABASE_NAME, 'align_production');
+});
+
+test('staging Compose applies Basic Auth to both public routers without changing production', async () => {
+  const source = await readFile(new URL('../compose.yaml', import.meta.url), 'utf8');
+  const staging = renderReleaseCompose(source, manifest, 'staging');
+  const production = renderReleaseCompose(source, manifest, 'production');
+  const stagingLabels = [...staging.services.web.labels, ...staging.services.api.labels].join('\n');
+  const productionLabels = [
+    ...production.services.web.labels,
+    ...production.services.api.labels,
+  ].join('\n');
+
+  assert.match(stagingLabels, /web-staging-auth\.basicauth\.users=\$\{STAGING_BASIC_AUTH_USERS/);
+  assert.match(stagingLabels, /api-staging-auth\.basicauth\.users=\$\{STAGING_BASIC_AUTH_USERS/);
+  assert.match(stagingLabels, /staging-auth\.basicauth\.removeheader=true/);
+  assert.match(
+    stagingLabels,
+    /-web\.middlewares=\$\{ROUTER_PREFIX\}-web-staging-auth,\$\{ROUTER_PREFIX\}-compress/,
+  );
+  assert.match(
+    stagingLabels,
+    /-api\.middlewares=\$\{ROUTER_PREFIX\}-api-staging-auth,\$\{ROUTER_PREFIX\}-api-strip,\$\{ROUTER_PREFIX\}-compress/,
+  );
+  assert.doesNotMatch(productionLabels, /staging-auth|STAGING_BASIC_AUTH_USERS/);
 });
 
 test('release Compose rejects unknown targets and mutable image references', () => {

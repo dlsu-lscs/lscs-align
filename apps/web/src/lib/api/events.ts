@@ -10,7 +10,9 @@ export type CreateEventPayload = {
   slot_interval_minutes: number;
 };
 
-export async function createEvent(payload: CreateEventPayload) {
+export async function createEvent(
+  payload: CreateEventPayload,
+): Promise<{ public_slug?: string; slug?: string }> {
   const response = await fetch('/api/events', {
     method: 'POST',
     headers: {
@@ -33,8 +35,7 @@ export async function createEvent(payload: CreateEventPayload) {
     );
   }
 
-  const data = await response.json();
-  return data;
+  return (await response.json()) as { public_slug?: string; slug?: string };
 }
 
 export type EventDetails = {

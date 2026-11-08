@@ -80,9 +80,9 @@ export default function SchedulePage() {
       },
       {
         onSuccess: (data) => {
-          console.log('Event created:', data);
           resetForm();
-          router.push('/');
+          const publicSlug = data.public_slug ?? data.slug;
+          router.push(publicSlug ? `/events/${publicSlug}/share` : '/');
         },
       },
     );
