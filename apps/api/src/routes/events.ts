@@ -197,7 +197,7 @@ export function registerEventRoutes(database?: Database, createSlug: () => strin
       });
     });
 
-    app.get('/events/:slug/details', async (request, reply) => {
+    app.get('/events/:slug', async (request, reply) => {
       const { slug } = request.params as { slug: string };
 
       if (!isValidSlug(slug)) {
@@ -237,7 +237,8 @@ export function registerEventRoutes(database?: Database, createSlug: () => strin
         .orderBy(eventDates.calendarDate, eventDates.weekday);
 
       return reply.status(200).send({
-        slug: event.publicSlug,
+        id: event.id,
+        public_slug: event.publicSlug,
         title: event.title,
         description: event.description,
         organizer: event.organizerName === null ? null : { name: event.organizerName },
@@ -248,49 +249,6 @@ export function registerEventRoutes(database?: Database, createSlug: () => strin
         daily_end_minute: event.dailyEndMinute,
         time_zone: event.timeZone,
         slot_interval_minutes: event.slotIntervalMinutes,
-      });
-    });
-
-    app.get('/events/:slug', async (request, reply) => {
-      const { slug } = request.params as { slug: string };
-
-      if (!isValidSlug(slug)) {
-        return reply.status(404).send({ error: 'event_not_found' });
-      }
-
-      if (!database) {
-        return reply.status(503).send({ error: 'database_unavailable' });
-      }
-
-      const found = await database
-        .select({
-          publicSlug: events.publicSlug,
-          title: events.title,
-          description: events.description,
-          scheduleType: events.scheduleType,
-          slotIntervalMinutes: events.slotIntervalMinutes,
-          dailyStartMinute: events.dailyStartMinute,
-          dailyEndMinute: events.dailyEndMinute,
-          createdAt: events.createdAt,
-        })
-        .from(events)
-        .where(eq(events.publicSlug, slug))
-        .limit(1);
-
-      const event = found[0];
-      if (!event) {
-        return reply.status(404).send({ error: 'event_not_found' });
-      }
-
-      return reply.status(200).send({
-        public_slug: event.publicSlug,
-        title: event.title,
-        description: event.description,
-        schedule_type: event.scheduleType,
-        slot_interval_minutes: event.slotIntervalMinutes,
-        daily_start_minute: event.dailyStartMinute,
-        daily_end_minute: event.dailyEndMinute,
-        created_at: event.createdAt.toISOString(),
       });
     });
   };

@@ -275,26 +275,26 @@ test('the time zone is optional and capped at the database limit', async () => {
   );
 });
 
-test('GET /events/:slug/details reports a safe error when no database is configured', async (t) => {
+test('GET /events/:slug reports a safe error when no database is configured', async (t) => {
   const { createApp } = await import('../src/app.ts');
   const app = createApp();
   await app.ready();
   t.after(() => app.close());
 
-  const response = await app.inject({ method: 'GET', url: '/events/Abcd12345/details' });
+  const response = await app.inject({ method: 'GET', url: '/events/Abcd12345' });
 
   assert.equal(response.statusCode, 503);
   assert.deepEqual(response.json(), { error: 'database_unavailable' });
 });
 
-test('GET /events/:slug/details rejects a malformed slug before reaching the database', async (t) => {
+test('GET /events/:slug rejects a malformed slug before reaching the database', async (t) => {
   const { createApp } = await import('../src/app.ts');
   const app = createApp();
   await app.ready();
   t.after(() => app.close());
 
   for (const slug of ['abc', 'z'.repeat(25), encodeURIComponent('has space')]) {
-    const response = await app.inject({ method: 'GET', url: `/events/${slug}/details` });
+    const response = await app.inject({ method: 'GET', url: `/events/${slug}` });
 
     assert.equal(response.statusCode, 404, slug);
     assert.deepEqual(response.json(), { error: 'event_not_found' });

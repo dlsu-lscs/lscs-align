@@ -240,53 +240,31 @@ test('each event receives a distinct public slug', async () => {
   assert.equal(counts.rows[0].distinct_slugs, 20);
 });
 
+function lookup(slug) {
+  return app.inject({ method: 'GET', url: `/events/${slug}` });
+}
+
 test('a public slug resolves to its own event', async () => {
   const first = (await post(payload({ title: 'First event' }))).json().public_slug;
   const second = (await post(payload({ title: 'Second event' }))).json().public_slug;
 
-  const lookup = await app.inject({ method: 'GET', url: `/events/${first}` });
-  assert.equal(lookup.statusCode, 200);
-  assert.equal(lookup.json().title, 'First event');
-
-  const other = await app.inject({ method: 'GET', url: `/events/${second}` });
-  assert.equal(other.json().title, 'Second event');
-});
-
-test('the public lookup never exposes the internal event id', async () => {
-  const slug = (await post(payload())).json().public_slug;
-  const body = (await app.inject({ method: 'GET', url: `/events/${slug}` })).json();
-
-  assert.equal(body.id, undefined);
-  assert.doesNotMatch(JSON.stringify(body), /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/);
+  const found = await lookup(first);
+  assert.equal(found.statusCode, 200);
+  assert.equal(found.json().title, 'First event');
+  assert.equal((await lookup(second)).json().title, 'Second event');
 });
 
 test('unknown and malformed slugs are both reported as not found', async () => {
   for (const slug of ['Zzzz99999', 'abc', encodeURIComponent('abc/def')]) {
-    const response = await app.inject({ method: 'GET', url: `/events/${slug}` });
+    const response = await lookup(slug);
     assert.equal(response.statusCode, 404, slug);
     assert.deepEqual(response.json(), { error: 'event_not_found' });
   }
 });
 
-test('the runtime role can read the public slug but cannot drop its unique index', async () => {
-  assert.equal((await post(payload())).statusCode, 201);
-
-  const read = await runtimePool.query('SELECT public_slug FROM align.events');
-  assert.equal(read.rows.length, 1);
-
-  await assert.rejects(
-    runtimePool.query('DROP INDEX align.events_public_slug_key'),
-    (error) => error.code === '42501',
-  );
-});
-
-function details(slug) {
-  return app.inject({ method: 'GET', url: `/events/${slug}/details` });
-}
-
-test('the details endpoint returns exactly the contract the public page consumes', async () => {
-  const slug = (await post(payload())).json().public_slug;
-  const response = await details(slug);
+test('the public lookup returns exactly the contract the event page consumes', async () => {
+  const created = (await post(payload())).json();
+  const response = await lookup(created.public_slug);
   const body = response.json();
 
   assert.equal(response.statusCode, 200);
@@ -295,15 +273,17 @@ test('the details endpoint returns exactly the contract the public page consumes
     'daily_start_minute',
     'dates',
     'description',
+    'id',
     'organizer',
+    'public_slug',
     'schedule_type',
     'slot_interval_minutes',
-    'slug',
     'time_zone',
     'title',
     'weekdays',
   ]);
-  assert.equal(body.slug, slug);
+  assert.equal(body.id, created.id);
+  assert.equal(body.public_slug, created.public_slug);
   assert.equal(body.title, 'Design sync');
   assert.equal(body.description, 'Weekly catch-up');
   assert.equal(body.schedule_type, 'dates_only');
@@ -313,12 +293,37 @@ test('the details endpoint returns exactly the contract the public page consumes
   assert.deepEqual(body.weekdays, []);
 });
 
-test('the details endpoint reports the organizer only when one was supplied', async () => {
+test('the id and slot format from the public lookup are accepted by the availability endpoint', async () => {
+  const slug = (
+    await post(
+      payload({
+        schedule_type: 'dates_and_times',
+        daily_start_minute: 540,
+        daily_end_minute: 1020,
+      }),
+    )
+  ).json().public_slug;
+  const event = (await lookup(slug)).json();
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/events/${event.id}/availability`,
+    payload: {
+      name: 'Patricia',
+      slots: [{ date: event.dates[0], minute: event.daily_start_minute }],
+    },
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().slot_count, 1);
+});
+
+test('the organizer is reported only when one was supplied', async () => {
   const named = (await post(payload({ organizer_name: 'Ejay Santos' }))).json().public_slug;
   const anonymous = (await post(payload({ title: 'No organizer' }))).json().public_slug;
 
-  assert.deepEqual((await details(named)).json().organizer, { name: 'Ejay Santos' });
-  assert.equal((await details(anonymous)).json().organizer, null);
+  assert.deepEqual((await lookup(named)).json().organizer, { name: 'Ejay Santos' });
+  assert.equal((await lookup(anonymous)).json().organizer, null);
 });
 
 test('a recurring event reports weekdays and no calendar dates', async () => {
@@ -333,7 +338,7 @@ test('a recurring event reports weekdays and no calendar dates', async () => {
       }),
     )
   ).json().public_slug;
-  const body = (await details(slug)).json();
+  const body = (await lookup(slug)).json();
 
   assert.equal(body.schedule_type, 'days_of_week');
   assert.deepEqual(body.weekdays, [1, 3, 5]);
@@ -347,41 +352,25 @@ test('an omitted time zone falls back to the database default', async () => {
   delete body.time_zone;
   const slug = (await post(body)).json().public_slug;
 
-  assert.equal((await details(slug)).json().time_zone, 'Asia/Manila');
+  assert.equal((await lookup(slug)).json().time_zone, 'Asia/Manila');
 });
 
 test('an explicit time zone survives the round trip', async () => {
   const slug = (await post(payload({ time_zone: 'Australia/Sydney' }))).json().public_slug;
 
-  assert.equal((await details(slug)).json().time_zone, 'Australia/Sydney');
+  assert.equal((await lookup(slug)).json().time_zone, 'Australia/Sydney');
 });
 
-test('the details endpoint exposes no internal or administrative fields', async () => {
-  const slug = (await post(payload())).json().public_slug;
-  const body = (await details(slug)).json();
+test('the runtime role can read the public slug but cannot drop its unique index', async () => {
+  assert.equal((await post(payload())).statusCode, 201);
 
-  assert.equal(body.id, undefined);
-  assert.equal(body.public_slug, undefined);
-  assert.equal(body.created_at, undefined);
-  assert.equal(body.updated_at, undefined);
-  assert.doesNotMatch(JSON.stringify(body), /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/);
-});
+  const read = await runtimePool.query('SELECT public_slug FROM align.events');
+  assert.equal(read.rows.length, 1);
 
-test('each slug resolves to its own details and never a neighbour', async () => {
-  const first = (await post(payload({ title: 'First event' }))).json().public_slug;
-  const second = (await post(payload({ title: 'Second event' }))).json().public_slug;
-
-  assert.equal((await details(first)).json().title, 'First event');
-  assert.equal((await details(second)).json().title, 'Second event');
-});
-
-test('unknown and malformed slugs are both reported as not found by the details endpoint', async () => {
-  for (const slug of ['Zzzz99999', 'abc', encodeURIComponent('abc/def')]) {
-    const response = await details(slug);
-
-    assert.equal(response.statusCode, 404, slug);
-    assert.deepEqual(response.json(), { error: 'event_not_found' });
-  }
+  await assert.rejects(
+    runtimePool.query('DROP INDEX align.events_public_slug_key'),
+    (error) => error.code === '42501',
+  );
 });
 
 test('the runtime role can read the public details columns but cannot alter them', async () => {
