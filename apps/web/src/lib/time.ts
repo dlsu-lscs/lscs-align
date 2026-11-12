@@ -8,3 +8,11 @@ export function formatMinutes(minutes: number): string {
   const min = minutes % 60;
   return `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
 }
+
+export function formatTime(minute: number): string {
+  const hours = Math.floor(minute / 60);
+  const min = minute % 60;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+  return `${displayHour}:${String(min).padStart(2, '0')} ${period}`;
+}
