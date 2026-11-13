@@ -24,6 +24,7 @@ export const createEventSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
     description: z.string().trim().max(2000).optional(),
+    organizer_name: z.string().trim().min(1).max(200).optional(),
     schedule_type: z.enum(['dates_only', 'dates_and_times', 'days_of_week']),
     dates: z
       .array(z.string().regex(ISO_DATE).refine(isRealCalendarDate, 'must be a real calendar date'))
@@ -142,10 +143,12 @@ export function registerEventRoutes(database?: Database, createSlug: () => strin
               publicSlug: createSlug(),
               title: payload.title,
               description: payload.description ? payload.description : null,
+              organizerName: payload.organizer_name ? payload.organizer_name : null,
               scheduleType: payload.schedule_type,
               slotIntervalMinutes: payload.slot_interval_minutes,
               dailyStartMinute: payload.daily_start_minute ?? null,
               dailyEndMinute: payload.daily_end_minute ?? null,
+              ...(payload.time_zone === undefined ? {} : { timeZone: payload.time_zone }),
             })
             .returning();
 
@@ -182,10 +185,12 @@ export function registerEventRoutes(database?: Database, createSlug: () => strin
         public_slug: created.publicSlug,
         title: created.title,
         description: created.description,
+        organizer_name: created.organizerName,
         schedule_type: created.scheduleType,
         slot_interval_minutes: created.slotIntervalMinutes,
         daily_start_minute: created.dailyStartMinute,
         daily_end_minute: created.dailyEndMinute,
+        time_zone: created.timeZone,
         dates: usesWeekdays ? [] : (payload.dates ?? []),
         weekdays: usesWeekdays ? (payload.weekdays ?? []) : [],
         created_at: created.createdAt.toISOString(),
@@ -205,14 +210,16 @@ export function registerEventRoutes(database?: Database, createSlug: () => strin
 
       const found = await database
         .select({
+          id: events.id,
           publicSlug: events.publicSlug,
           title: events.title,
           description: events.description,
+          organizerName: events.organizerName,
           scheduleType: events.scheduleType,
           slotIntervalMinutes: events.slotIntervalMinutes,
           dailyStartMinute: events.dailyStartMinute,
           dailyEndMinute: events.dailyEndMinute,
-          createdAt: events.createdAt,
+          timeZone: events.timeZone,
         })
         .from(events)
         .where(eq(events.publicSlug, slug))
@@ -223,15 +230,25 @@ export function registerEventRoutes(database?: Database, createSlug: () => strin
         return reply.status(404).send({ error: 'event_not_found' });
       }
 
+      const scheduleRows = await database
+        .select({ calendarDate: eventDates.calendarDate, weekday: eventDates.weekday })
+        .from(eventDates)
+        .where(eq(eventDates.eventId, event.id))
+        .orderBy(eventDates.calendarDate, eventDates.weekday);
+
       return reply.status(200).send({
+        id: event.id,
         public_slug: event.publicSlug,
         title: event.title,
         description: event.description,
+        organizer: event.organizerName === null ? null : { name: event.organizerName },
         schedule_type: event.scheduleType,
-        slot_interval_minutes: event.slotIntervalMinutes,
+        dates: scheduleRows.flatMap((row) => (row.calendarDate === null ? [] : [row.calendarDate])),
+        weekdays: scheduleRows.flatMap((row) => (row.weekday === null ? [] : [row.weekday])),
         daily_start_minute: event.dailyStartMinute,
         daily_end_minute: event.dailyEndMinute,
-        created_at: event.createdAt.toISOString(),
+        time_zone: event.timeZone,
+        slot_interval_minutes: event.slotIntervalMinutes,
       });
     });
   };
