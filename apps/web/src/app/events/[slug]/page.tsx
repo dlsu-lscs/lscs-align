@@ -3,16 +3,9 @@
 import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getEvent, EventNotFoundError } from '@/lib/api/events';
-import { formatMinutes } from '@/lib/time';
 import Link from 'next/link';
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-const SCHEDULE_LABELS = {
-  dates_only: 'Dates Only',
-  dates_and_times: 'Dates & Times',
-  days_of_week: 'Recurring Days',
-};
+import { getColumns } from '@/lib/availability';
+import AvailabilityForm from '@/components/events/availability-form';
 
 export default function EventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -60,41 +53,43 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
     return <main className="p-4 text-center">Something went wrong. Please try again.</main>;
   }
 
-  const gridAvail = {
-    id: data.id,
-    schedule_type: data.schedule_type,
-    dates: data.dates ?? [],
-    weekdays: data.weekdays ?? [],
-    start_minute: data.daily_start_minute,
-    end_minute: data.daily_end_minute,
-    slot_interval_minutes: data.slot_interval_minutes,
-    time_zone: data.time_zone,
-  };
-
   return (
-    <main className="p-4 text-center">
-      <h1 className="text-2xl font-semibold">{data.title}</h1>
-      {data.description && <p>{data.description}</p>}
+    <main className="p-4">
+      <div className="mx-auto w-full max-w-[1100px]">
+        <AvailabilityForm
+          header={
+            <>
+              <h1 className="mx-auto max-w-[533px] text-[40px] font-normal leading-[normal] tracking-tighter wrap-break-word text-ink text-center">
+                {data.title}
+              </h1>
 
-      <p>{SCHEDULE_LABELS[data.schedule_type]}</p>
+              {data.description && (
+                <p className="mx-auto mt-1.5 max-w-[533px] text-[16px] font-normal leading-[normal] tracking-tighter wrap-break-word text-[#777777] text-center">
+                  {data.description}
+                </p>
+              )}
 
-      {data.schedule_type === 'days_of_week' ? (
-        <p>{(data.weekdays ?? []).map((days) => WEEKDAYS[days]).join(', ')}</p>
-      ) : (
-        <p>{(data.dates ?? []).join(', ')}</p>
-      )}
-
-      {data.daily_start_minute !== null && data.daily_end_minute !== null && (
-        <p>
-          {formatMinutes(data.daily_start_minute)} to {formatMinutes(data.daily_end_minute)}
-        </p>
-      )}
-
-      <p>{data.slot_interval_minutes} minute slots</p>
-
-      {data.organizer && <p>Organized by {data.organizer.name}</p>}
-
-      <div data-grid-avail={JSON.stringify(gridAvail)} hidden />
+              {data.organizer && (
+                <p className="mt-1 text-[16px] font-normal leading-[normal] tracking-tighter text-[#777777] text-center">
+                  Event Organizer: {data.organizer.name}
+                </p>
+              )}
+            </>
+          }
+          event={{
+            id: data.id,
+            schedule_type: data.schedule_type,
+            columns: getColumns({
+              schedule_type: data.schedule_type,
+              dates: data.dates ?? [],
+              weekdays: data.weekdays ?? [],
+            }),
+            start_minute: data.daily_start_minute,
+            end_minute: data.daily_end_minute,
+            interval_minutes: data.slot_interval_minutes,
+          }}
+        />
+      </div>
     </main>
   );
 }

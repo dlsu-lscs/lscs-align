@@ -118,9 +118,7 @@ export default function SharePage({ params }: { params: Promise<{ slug: string }
             </button>
           </div>
 
-          {copyError && (
-            <p className="mt-2 text-[14px] -tracking-tighter text-error">{copyError}</p>
-          )}
+          {copyError && <p className="mt-2 text-[14px] tracking-tighter text-error">{copyError}</p>}
 
           <p className="mt-10 text-[24px] font-normal tracking-tighter text-black">Share to:</p>
         </div>

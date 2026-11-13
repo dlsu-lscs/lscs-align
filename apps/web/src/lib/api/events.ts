@@ -63,3 +63,34 @@ export async function getEvent(slug: string): Promise<EventDetails> {
 
   return (await response.json()) as EventDetails;
 }
+
+export type SubmitAvailabilityPayload = {
+  name: string;
+  email?: string;
+  slots: { date?: string; weekday?: number; minute?: number }[];
+};
+
+export async function submitAvailability(
+  eventId: string,
+  payload: SubmitAvailabilityPayload,
+): Promise<void> {
+  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/availability`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+      message?: string;
+      details?: { field: string; message: string }[];
+    } | null;
+    throw new Error(
+      body?.details?.[0]?.message ??
+        body?.error ??
+        body?.message ??
+        `HTTP error! Status: ${response.status}`,
+    );
+  }
+}
