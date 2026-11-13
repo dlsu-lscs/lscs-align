@@ -4,7 +4,7 @@ import { use, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { getEvent, EventNotFoundError } from '@/lib/api/events';
-
+import Image from 'next/image';
 import { Copy, X } from 'lucide-react';
 
 export default function SharePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -71,6 +71,28 @@ export default function SharePage({ params }: { params: Promise<{ slug: string }
     }
   };
 
+  const shareActions = [
+    {
+      name: 'Messenger',
+      icon: '/icons/Messenger.svg',
+      url: 'https://www.messenger.com/',
+      copyFirst: true,
+    },
+    { name: 'Discord', icon: '/icons/Discord.svg', url: 'https://discord.com/', copyFirst: true },
+    { name: 'Gmail', icon: '/icons/Gmail.svg', url: 'https://mail.google.com/', copyFirst: true },
+    {
+      name: 'Instagram',
+      icon: '/icons/Instagram.svg',
+      url: 'https://www.instagram.com/',
+      copyFirst: true,
+    },
+  ];
+
+  const handleShare = (target: (typeof shareActions)[number]) => {
+    if (target.copyFirst) void handleCopy();
+    window.open(target.url, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <main className="flex min-h-[70vh] items-center justify-center p-4">
       <section
@@ -118,11 +140,30 @@ export default function SharePage({ params }: { params: Promise<{ slug: string }
             </button>
           </div>
 
-          {copyError && (
-            <p className="mt-2 text-[14px] -tracking-tighter text-error">{copyError}</p>
-          )}
+          {copyError && <p className="mt-2 text-[14px] tracking-tighter text-error">{copyError}</p>}
 
           <p className="mt-10 text-[24px] font-normal tracking-tighter text-black">Share to:</p>
+
+          <ul className="mt-4 flex justify-between">
+            {shareActions.map((target) => (
+              <li key={target.name}>
+                <button
+                  type="button"
+                  onClick={() => handleShare(target)}
+                  className="flex flex-col items-center gap-1"
+                >
+                  <Image
+                    src={target.icon}
+                    alt=""
+                    width={60}
+                    height={60}
+                    className="size-[60px] object-contain"
+                  />
+                  <span className="text-[16px] tracking-tighter text-[#777777]">{target.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
     </main>
