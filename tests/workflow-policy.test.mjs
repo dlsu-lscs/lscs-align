@@ -201,4 +201,20 @@ test('manual rollback is protected, manifest-driven, and schema-compatible', asy
     true,
   );
   assert.match(source, new RegExp(`actions/download-artifact@${downloadArtifactSha}`));
+
+  const rollbackSteps = steps(rollback);
+  const schemaStep = rollbackSteps.find((step) => step.run?.includes('schema-compatibility.mjs'));
+  const smokeStep = rollbackSteps.find((step) => step.run?.includes('smoke.mjs'));
+  assert(schemaStep, 'schema compatibility step must exist');
+  assert(smokeStep, 'external smoke verification step must exist');
+  assert.equal(
+    schemaStep.env?.STAGING_BASIC_AUTHORIZATION,
+    '${{ secrets.STAGING_BASIC_AUTHORIZATION }}',
+  );
+  assert.equal(
+    smokeStep.env?.STAGING_BASIC_AUTHORIZATION,
+    '${{ secrets.STAGING_BASIC_AUTHORIZATION }}',
+  );
+  assert.doesNotMatch(source, /CLOUDFLARE_ACCESS_CLIENT_ID/);
+  assert.doesNotMatch(source, /CLOUDFLARE_ACCESS_CLIENT_SECRET/);
 });
